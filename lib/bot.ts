@@ -41,7 +41,8 @@ bot.command("ask", async (ctx) => {
 
   const chk = await imd.check(raw, PANEL);
   if (chk.blockers?.length || !chk.request) {
-    return ctx.reply(`The swarm won't take that one:\n${esc(chk.blockers?.join("\n") || "no drafted request")}`, { parse_mode: "HTML" });
+    const why = chk.blockers?.map((b) => `• ${esc(b.detail)}`).join("\n") || "• no drafted request";
+    return ctx.reply(`The swarm won't take that one:\n${why}`, { parse_mode: "HTML" });
   }
   const r = chk.request;
   // User pays for the normalized question the panel will actually see, so show that, not their text.
@@ -80,7 +81,7 @@ bot.command("ask", async (ctx) => {
 // ---- ask the swarm (shared by free button and paid webhook) --------------------------------------
 export async function askAndMark(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId) {
   const chk = await imd.check(question, PANEL);
-  if (!chk.request || chk.blockers?.length) throw new Error(`check failed: ${chk.blockers?.join("; ")}`);
+  if (!chk.request || chk.blockers?.length) throw new Error(`check failed: ${chk.blockers?.map((b) => b.code).join("; ")}`);
   if (intake.CHAINS[chainId].free) await intake.ensureAllowance(chainId, account());
   const tx = await intake.ask(chainId, account(), chk.request);
   await bot.api.editMessageText(chatId, msgId,

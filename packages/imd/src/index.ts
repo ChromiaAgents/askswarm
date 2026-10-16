@@ -31,7 +31,7 @@ export interface OracleRequestBody {
 
 export interface CheckResult {
   action: string;
-  blockers: string[];
+  blockers: { code: string; detail: string }[];
   suggestions: unknown[];
   request?: OracleRequestBody;
   online?: unknown;
