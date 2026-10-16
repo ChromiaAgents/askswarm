@@ -112,15 +112,18 @@ Before the Pay button, the card shows the chance this exact request ends without
 by a model trained on [evalengine/imd-oracle-outcomes](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes)
 (7.8k IMD oracle requests, label = attested or disagreed). Hashed logistic regression over request
 shape only (answer type, panel size, quorum ratio, length, moving-target and future wording, missing
-answer format, pinned window). Word n-grams were dropped: they overfit (test AUC 0.55 vs 0.75).
+answer format). Word n-grams were dropped: they overfit (test AUC 0.55 vs 0.75).
 
 | split (2026-10-13) | n | disagreed | AUC |
 |---|---|---|---|
-| validation | 1349 | 6 | 0.87 |
-| test | 381 | 70 | 0.73 |
+| validation | 1349 | 6 | 0.81 |
+| test | 381 | 70 | 0.56 |
 
-Zero runtime cost, 50 KB of weights, lands near the LLM baselines on the dataset card (F1 0.4–0.5 for
-Haiku/Sonnet/GLM at the same task). High risk also prints why: no answer format, asks two things,
+Caveat worth knowing before trusting the test number on the dataset card: most disagreed rows in
+the test split share one `validForSeconds=86400` setting from a single batch of bad questions. A
+model that keys on that field scores test AUC 0.73, and IMD's check now defaults every live draft
+to 86400, so it marked every real question high-risk. The field is excluded here. What remains is
+a weak but honest prior, zero runtime cost, 50 KB of weights. High risk also prints why: no answer format, asks two things,
 moving target, future date. Retrain: `bun run train:risk <dir with the snapshot jsonl files>`.
 
 ## Run the gate

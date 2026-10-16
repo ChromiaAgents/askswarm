@@ -6,7 +6,7 @@ import { features, BUCKETS } from "../lib/risk";
 const dir = process.argv[2] ?? ".";
 const load = (s: string) => readFileSync(`${dir}/${s}.jsonl`, "utf8").trim().split("\n").map((l) => {
   const r = JSON.parse(l); const i = JSON.parse(r.input_json);
-  return { x: features({ question: i.question, answerType: i.answerType, panelSize: i.panelSize ?? 0, quorum: i.quorum ?? 0, evidence: i.evidence, validForSeconds: i.validForSeconds, window: i.window }), y: r.label as 0 | 1 };
+  return { x: features({ question: i.question, answerType: i.answerType, panelSize: i.panelSize ?? 0, quorum: i.quorum ?? 0, evidence: i.evidence }), y: r.label as 0 | 1 };
 });
 const train = load("train"), val = load("validation"), test = load("test");
 

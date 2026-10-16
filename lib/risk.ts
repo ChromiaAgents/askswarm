@@ -4,7 +4,7 @@
 import model from "./risk-model.json";
 
 export const BUCKETS = 8192;
-export type Draft = { question: string; answerType: string; panelSize: number; quorum: number; evidence?: string; validForSeconds?: number; window?: unknown };
+export type Draft = { question: string; answerType: string; panelSize: number; quorum: number; evidence?: string };
 
 const fnv = (s: string) => {
   let h = 0x811c9dc5;
@@ -23,7 +23,9 @@ export function features(d: Draft): number[] {
   const q = d.question;
   const f = ["bias", `type=${d.answerType}`, `len=${Math.min(7, Math.floor(q.length / 100))}`,
     `qr=${Math.round((d.quorum / Math.max(d.panelSize, 1)) * 10)}`, `panel=${d.panelSize <= 10 ? "s" : d.panelSize <= 50 ? "m" : "l"}`,
-    `ev=${d.evidence ?? "panel"}`, `vf=${Math.round(Math.log10((d.validForSeconds ?? 1) + 1))}`, `win=${d.window ? "y" : "n"}`];
+    `ev=${d.evidence ?? "panel"}`];
+  // Not used: validForSeconds and window. One batch of bad questions all carried 86400s validity, and
+  // IMD's check now defaults every draft to that, so the feature marked every live question high-risk.
   if (REALTIME.test(q)) f.push("realtime");
   if (FUTURE.test(q)) f.push("future");
   if (UNKNOWABLE.test(q)) f.push("unknowable");
@@ -51,4 +53,4 @@ export function hints(d: Draft): string[] {
   return h;
 }
 
-export const riskLabel = (p: number) => (p < 0.05 ? "low" : p < 0.2 ? "medium" : "high");
+export const riskLabel = (p: number) => (p < 0.1 ? "low" : p < 0.25 ? "medium" : "high");
