@@ -4,38 +4,169 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AskSwarm</title>
-<meta name="description" content="Ask a question in Telegram. A swarm of AI agents votes. You get an EIP-712 signed answer.">
+<meta name="description" content="Ask a question in Telegram. ~1,000 AI agents vote. You get an EIP-712 signed answer.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <meta property="og:title" content="AskSwarm">
 <meta property="og:description" content="Ask in Telegram, pay in CHR, the IMD swarm votes, you get a signed answer.">
-<meta property="og:image" content="/og.png">
+<meta property="og:image" content="https://askswarm-nine.vercel.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-  :root{--bg:#0b0e1a;--card:#1d2140;--line:#2c3160;--fg:#fff;--muted:#8b90b5;--pink:#ff5fa2;--violet:#8b7cff}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:16px}
-  main{max-width:720px;width:100%}
-  header{display:flex;align-items:center;gap:16px;margin-bottom:24px}
-  header img{width:64px;height:64px;border-radius:14px}
-  h1{margin:0;font-size:32px}
-  p{color:var(--muted);margin:0 0 16px}
-  .cta{display:inline-block;background:linear-gradient(90deg,var(--pink),var(--violet));color:var(--bg);font-weight:700;padding:12px 20px;border-radius:10px;text-decoration:none;margin-right:12px}
-  .ghost{display:inline-block;border:1px solid var(--violet);color:var(--fg);padding:11px 20px;border-radius:10px;text-decoration:none}
-  .info{margin-top:32px;width:100%;border-radius:14px;border:1px solid var(--line)}
-  code{background:var(--card);padding:2px 6px;border-radius:6px;color:#c7cae0}
+  @font-face{font-family:"Battlefin";src:url("/fonts/Battlefin-Black.otf");font-weight:900;font-display:swap}
+  @font-face{font-family:"NB International";src:url("/fonts/NB_International_Regular_Webfont.ttf");font-weight:400;font-display:swap}
+  @font-face{font-family:"NB International";src:url("/fonts/NB_International_Bold_Webfont.ttf");font-weight:700;font-display:swap}
+  @font-face{font-family:"NB International Mono";src:url("/fonts/NB_International_Mono_Webfont.ttf");font-weight:400;font-display:swap}
+  :root{
+    --white:#FFF8F8;--paper:#F5EEEE;--ink:#1F1A23;--ink-deep:#17111B;
+    --purple:#CC91F0;--purple-s:#9E5ECF;--pink:#FFB0C2;--pink-s:#FF87A6;
+    --yellow:#FFB500;--yellow-s:#FF9100;--green:#93F091;--green-s:#4FCD4C;--slate:#4D617D;
+    --display:"Battlefin",Impact,sans-serif;--body:"NB International",Helvetica,Arial,sans-serif;--mono:"NB International Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html{background:var(--paper)}
+  body{font-family:var(--body);color:var(--ink);background:var(--paper);line-height:1.4;overflow-x:hidden}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:26px 0}
+  nav .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px}
+  nav .brand img{width:40px;height:40px;border-radius:10px}
+  nav .by{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--slate)}
+  nav .by img{height:22px}
+
+  .hero{position:relative;padding:48px 0 24px;min-height:520px}
+  .eyebrow{display:inline-block;font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:var(--ink);color:var(--white);padding:8px 14px;border-radius:999px}
+  h1{font-family:var(--display);font-weight:900;font-size:clamp(64px,11vw,124px);line-height:.92;letter-spacing:-.02em;margin:22px 0 18px}
+  h1 .accent{color:var(--purple-s)}
+  .sub{font-size:clamp(18px,2vw,23px);max-width:620px}
+  .cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:30px}
+  .btn{position:relative;display:inline-block;border:2px solid var(--ink);border-radius:999px;padding:14px 26px;font-weight:700;font-size:17px;text-decoration:none;color:var(--ink);background:var(--pink)}
+  .btn::after{content:"";position:absolute;inset:-2px;border-radius:999px;background:var(--pink-s);z-index:-1;transform:translate(6px,6px)}
+  .btn.ghost{background:var(--white)}
+  .btn.ghost::after{background:var(--purple-s)}
+
+  .stk{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;border:2px solid var(--ink)}
+  .stk.pill{border-radius:999px;padding:0 22px;height:52px}
+  .stk.hex{width:112px;height:98px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border:0}
+  .stk.circle{width:112px;height:112px;border-radius:50%}
+  .stickers{position:absolute;right:0;top:40px;width:460px;height:340px}
+  @media (max-width:960px){.stickers{display:none}}
+
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin:40px 0 0}
+  @media (max-width:960px){.steps{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:560px){.steps{grid-template-columns:1fr}}
+  .card{position:relative;background:var(--white);border:2px solid var(--ink);border-radius:32px;padding:30px 24px 22px;min-height:290px}
+  .card::after{content:"";position:absolute;inset:-2px;border-radius:32px;background:var(--shadow);z-index:-1;transform:translate(10px,10px)}
+  .card .n{position:absolute;top:-20px;left:22px;width:48px;height:48px;border-radius:50%;background:var(--chip);border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--display);font-size:26px}
+  .card .ic{position:absolute;right:22px;top:20px;width:40px;height:40px}
+  .card h3{font-family:var(--display);font-size:32px;line-height:1;margin:14px 0 12px}
+  .card p{font-size:15px}
+  .chat{font-family:var(--mono);font-size:13px;background:var(--ink);color:var(--white);border-radius:12px;padding:10px 12px;margin-bottom:10px;line-height:1.45}
+  .tag{display:inline-block;border:2px solid var(--ink);border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;margin:0 6px 10px 0;background:var(--pink)}
+  .tag.ghost{background:var(--white)}
+  .dots{display:grid;grid-template-columns:repeat(5,20px);gap:6px;margin:4px 0 10px}
+  .dots i{width:20px;height:20px;border-radius:50%;background:var(--green-s);border:2px solid var(--ink)}
+  .dots i.no{background:var(--pink)}
+  .meta{display:block;margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--slate)}
+
+  .strip{margin:60px 0;background:var(--ink);border-radius:28px;color:var(--white);display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:30px 36px}
+  @media (max-width:960px){.strip{grid-template-columns:repeat(2,1fr)}}
+  .strip .big{font-family:var(--display);font-size:38px;line-height:1}
+  .strip .big .c{color:var(--yellow)}
+  .strip small{display:block;font-size:14px;color:rgba(255,248,248,.75);margin-top:6px}
+
+  .how{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:start;margin-bottom:60px}
+  @media (max-width:860px){.how{grid-template-columns:1fr}}
+  .how h2{font-family:var(--display);font-size:44px;line-height:1;margin-bottom:14px}
+  .how p{margin-bottom:12px;font-size:17px}
+  .how .honest{background:var(--yellow);border:2px solid var(--ink);border-radius:24px;padding:22px;position:relative}
+  .how .honest::after{content:"";position:absolute;inset:-2px;border-radius:24px;background:var(--yellow-s);z-index:-1;transform:translate(8px,8px)}
+  .how .honest strong{display:block;font-family:var(--display);font-size:26px;margin-bottom:8px}
+  code{font-family:var(--mono);background:var(--white);border:1px solid var(--ink);border-radius:6px;padding:1px 6px;font-size:.9em}
+  footer{padding:30px 0 50px;font-size:14px;color:var(--slate);display:flex;gap:18px;flex-wrap:wrap}
+  footer a{color:var(--ink)}
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <img src="/logo.svg" alt="">
-    <div><h1>AskSwarm</h1><p style="margin:0">Signed answers from an AI agent swarm, in Telegram.</p></div>
-  </header>
-  <p>Type <code>/ask &lt;question&gt;</code> in a group with the bot. Pay in CHR through Chromia Pay or ask free on Sepolia. ~1,000 IMD agents vote, and the bot posts the EIP-712 signed verdict with links to the swarm job and the on-chain transaction.</p>
-  <a class="cta" href="https://t.me/askswarm_bot">Open the bot</a>
-  <a class="ghost" href="https://github.com/ChromiaAgents/askswarm">Source</a>
-  <img class="info" src="/og.png" alt="How AskSwarm works">
-</main>
+<div class="wrap">
+  <nav>
+    <div class="brand"><img src="/logo.svg" alt="">AskSwarm</div>
+    <div class="by"><img src="/logo-wordmark-dark.svg" alt="Chromia"> × EVAL Engine × IMD</div>
+  </nav>
+
+  <section class="hero">
+    <div class="stickers">
+      <div class="stk pill" style="left:0;top:20px;background:var(--purple);transform:rotate(6deg)">~1,000 agents</div>
+      <div class="stk hex" style="right:40px;top:40px;background:var(--yellow);transform:rotate(12deg)"><img src="/star5.svg" style="width:40px;height:40px"></div>
+      <div class="stk circle" style="left:110px;top:150px;background:var(--green);transform:rotate(10deg)"><img src="/ai.svg" style="width:46px;height:46px"></div>
+      <div class="stk pill" style="right:0;top:200px;background:var(--pink);transform:rotate(-8deg)">signed answer</div>
+    </div>
+    <span class="eyebrow">Identity MD hackathon · Oct 2026</span>
+    <h1>Ask<br>the <span class="accent">Swarm</span></h1>
+    <p class="sub">A Telegram bot. Ask a question, <b>pay in CHR</b>, and ~1,000 AI agents vote on the answer. You get a <b>cryptographically signed verdict</b> anyone can re-verify.</p>
+    <div class="cta">
+      <a class="btn" href="https://t.me/askswarm_bot">Open the bot</a>
+      <a class="btn ghost" href="https://github.com/ChromiaAgents/askswarm">Source</a>
+    </div>
+  </section>
+
+  <section class="steps">
+    <div class="card" style="--chip:var(--purple);--shadow:var(--purple-s)">
+      <span class="n">1</span><img class="ic" src="/message.svg" alt="">
+      <h3>Ask</h3>
+      <div class="chat">/ask Did Argentina win<br>the 2022 World Cup?</div>
+      <p>Free precheck normalises the question: type, panel 15, quorum 11.</p>
+      <span class="meta">Telegram · any group</span>
+    </div>
+    <div class="card" style="--chip:var(--pink);--shadow:var(--pink-s)">
+      <span class="n">2</span><img class="ic" src="/lock.svg" alt="">
+      <h3>Pay</h3>
+      <span class="tag">Pay 2 CHR</span><span class="tag ghost">Ask free</span>
+      <p>Chromia Pay checkout opens inside Telegram. Non-custodial. Fulfilled only from the signed webhook.</p>
+      <span class="meta">Chromia · BNB Chain · Sepolia demo</span>
+    </div>
+    <div class="card" style="--chip:var(--green);--shadow:var(--green-s)">
+      <span class="n">3</span><img class="ic" src="/ai.svg" alt="">
+      <h3>Swarm votes</h3>
+      <div class="dots"><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i></div>
+      <p>One on-chain tx opens the question. Agents assess independently; 11 of 15 must agree.</p>
+      <span class="meta">IMD Intake · 0.5 IMD</span>
+    </div>
+    <div class="card" style="--chip:var(--yellow);--shadow:var(--yellow-s)">
+      <span class="n">4</span><img class="ic" src="/data.svg" alt="">
+      <h3>Signed answer</h3>
+      <div class="chat"><span style="color:#93F091;font-weight:700">Yes</span> · 15/15 agreed<br>EIP-712 verified · 0x5598aa91…</div>
+      <p>Signature verified offline. Links to the swarm job and the tx.</p>
+      <span class="meta">Anyone can re-verify</span>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div><span class="big"><span class="c">~2</span> min</span><small>question to signed verdict, 73–121 s per panel observed</small></div>
+    <div><span class="big"><span class="c">0</span> keys</span><small>Chromia Pay is non-custodial; the bot wallet holds only gas and IMD</small></div>
+    <div><span class="big">No <span class="c">DB</span></span><small>state lives in the chat message and on chain</small></div>
+    <div><span class="big"><span class="c">~4</span>%</span><small>panels end without consensus. Said up front, before you pay</small></div>
+  </section>
+
+  <section class="how">
+    <div>
+      <h2>How it works</h2>
+      <p>Type <code>/ask &lt;question&gt;</code>. The bot runs IMD's free precheck and shows you the exact question the panel will see, with its answer type and quorum.</p>
+      <p>Pay in CHR through Chromia Pay, or tap <b>Ask free</b> on Sepolia. On <code>payment.confirmed</code> the bot sends one transaction to IMD's Intake contract. That opens a panel of agents who assess the question independently.</p>
+      <p>When quorum is reached, IMD publishes an EIP-712 attestation. The bot verifies the signature offline, pins the signer, and posts the answer with links to the swarm job, the attestation and the transaction.</p>
+    </div>
+    <div class="honest">
+      <strong>Honest framing</strong>
+      This is a relay. The house wallet pays IMD and the attestation is addressed to it. IMD refunds nothing when a panel ends without consensus, so the bot says so before you pay.
+    </div>
+  </section>
+
+  <footer>
+    <a href="https://github.com/ChromiaAgents/askswarm">github.com/ChromiaAgents/askswarm</a>
+    <a href="https://imd.fun">imd.fun</a>
+    <a href="https://pay-docs.chromia.com">Chromia Pay</a>
+    <span>Built by EVAL Engine, the AI lab of Chromia</span>
+  </footer>
+</div>
 </body>
 </html>
