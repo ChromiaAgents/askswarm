@@ -60,18 +60,18 @@ flowchart LR
     end
     subgraph ETH[Ethereum / Sepolia]
         K[(Hot wallet<br/>gas + IMD only)]
-        IN[Intake v2<br/>0xa43e…de82]
+        IN["Intake v2<br/>0xa43e…de82"]
     end
     subgraph IMD[IMD control plane]
-        CHK[/requests/check]
-        RD[/intake/:chain/:tx]
-        OR[/oracle/requests/:id]
-        AT[/attestation<br/>EIP-712/]
+        CHK["/requests/check"]
+        RD["/intake/:chain/:tx"]
+        OR["/oracle/requests/:id"]
+        AT["/attestation<br/>EIP-712"]
     end
     U <-->|/ask, buttons| T
     L -->|payments.create| C
     H -->|payment.confirmed| W
-    L -->|request(...)| IN
+    L -->|"request(...)"| IN
     K -. signs .-> IN
     IN -->|Requested event| RD
     L --> CHK
