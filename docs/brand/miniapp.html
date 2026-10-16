@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:"Battlefin";src:url("Battlefin-Black.otf")}
+@font-face{font-family:"NB International";src:url("NB_International_Regular_Webfont.ttf");font-weight:400}
+@font-face{font-family:"NB International";src:url("NB_International_Bold_Webfont.ttf");font-weight:700}
+*{box-sizing:border-box;margin:0}
+body{width:640px;height:360px;background:#F5EEEE;font-family:"NB International",Helvetica,sans-serif;color:#1F1A23;position:relative;overflow:hidden}
+.logo{position:absolute;left:36px;top:76px;width:208px;height:208px}
+h1{position:absolute;left:280px;top:70px;width:330px;font-family:Battlefin;font-size:54px;line-height:.92;letter-spacing:-.02em;white-space:nowrap}
+h1 span{color:#9E5ECF}
+.sub{position:absolute;left:280px;top:200px;font-size:17px;line-height:1.3;width:280px}
+.sub b{font-weight:700}
+.pill{position:absolute;display:flex;align-items:center;justify-content:center;border:2px solid #1F1A23;border-radius:999px;font-weight:700;font-size:14px;height:36px;padding:0 16px}
+.pill::after{content:"";position:absolute;inset:-2px;border-radius:999px;z-index:-1;transform:translate(4px,4px);background:var(--s)}
+.hex{position:absolute;width:64px;height:56px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:#FFB500;display:grid;place-items:center}
+</style></head><body>
+<img class="logo" src="../logo.svg">
+<h1>Ask<br>the <span>Swarm</span></h1>
+<p class="sub">Pay <b>2 CHR</b> with Chromia Pay. Non-custodial, from your own wallet.</p>
+<div class="pill" style="right:28px;top:26px;background:#CC91F0;--s:#9E5ECF;transform:rotate(6deg)">~1,000 agents</div>
+<div class="pill" style="right:30px;bottom:22px;background:#FFB0C2;--s:#FF87A6;transform:rotate(-6deg)">signed answer</div>
+<div class="hex" style="left:216px;top:42px;transform:rotate(12deg)"><img src="star5.svg" style="width:24px"></div>
+</body></html>
