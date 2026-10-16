@@ -1,5 +1,7 @@
 # AskSwarm
 
+![What AskSwarm does: ask in Telegram, pay in CHR, the IMD swarm votes, you get an EIP-712 signed answer](docs/askswarm.svg)
+
 Telegram bot: ask a factual question in chat, the [IMD](https://imd.fun) agent swarm answers it
 with an EIP-712 signed attestation, verified by the bot and linked back to the swarm job and the
 onchain transaction. Pay in CHR through Chromia Pay, or ask free on Sepolia.
