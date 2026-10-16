@@ -15,7 +15,7 @@ const PRICE_CHR = process.env.CPAY_PRICE_CHR ?? "2.00";
 const MAX_Q = 500;
 
 export const account = () => privateKeyToAccount(env("EVM_PRIVATE_KEY") as Hex);
-export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.env.CPAY_SECRET_KEY) : null;
+export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.env.CPAY_SECRET_KEY, { baseUrl: process.env.CPAY_API_URL }) : null;
 
 export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"));
 
