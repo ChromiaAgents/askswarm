@@ -60,11 +60,13 @@ bot.command("ask", async (ctx) => {
       idempotencyKey: askId,
       metadata: { askId, chatId: ctx.chat.id, statusMsgId: status.message_id, threadId: ctx.msg.message_thread_id ?? null, question: r.question },
     });
-    // Mini App keeps the payer inside Telegram. Telegram allows web_app inline buttons only in private
-    // chats, so groups fall back to a plain link that opens the hosted checkout in the browser.
+    // Mini App keeps the payer inside Telegram. web_app inline buttons are private-chat only, so groups
+    // get the direct-link Mini App (BotFather /newapp, short name "pay") with the checkout's cs_ id as
+    // startapp; public/pay.html forwards into the hosted checkout.
     kb.row();
+    const csId = payment.checkout_url.split("/").pop()!;
     if (ctx.chat.type === "private") kb.webApp(`Pay ${PRICE_CHR} CHR`, payment.checkout_url);
-    else kb.url(`Pay ${PRICE_CHR} CHR`, payment.checkout_url);
+    else kb.url(`Pay ${PRICE_CHR} CHR`, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
     await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
   }
 });

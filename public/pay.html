@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskSwarm · Pay</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F5EEEE;color:#1F1A23;font:17px/1.4 "NB International",Helvetica,Arial,sans-serif;text-align:center;padding:24px}
+  .pill{display:inline-block;background:#FFB0C2;border:2px solid #1F1A23;border-radius:999px;padding:10px 18px;font-weight:700}
+  a{color:#9E5ECF}
+</style>
+</head>
+<body>
+<div>
+  <img src="/logo.svg" alt="" width="72" height="72" style="border-radius:18px">
+  <p id="msg" class="pill">Opening Chromia Pay…</p>
+  <p id="fallback" hidden>If nothing opens, <a id="link" href="#">tap here</a>.</p>
+</div>
+<script>
+  // Direct-link Mini App launcher: t.me/askswarm_bot/pay?startapp=<cs_id>. Telegram forbids web_app
+  // inline buttons in groups, so the bot links here and this page forwards into the hosted checkout.
+  // The cs_ id is the checkout's own single-use credential; nothing else is encoded or stored.
+  var tg = window.Telegram && Telegram.WebApp;
+  var param = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) ||
+              new URLSearchParams(location.search).get("tgWebAppStartParam") ||
+              new URLSearchParams(location.search).get("cs");
+  if (tg) { tg.ready(); tg.expand(); }
+  if (param && /^cs_(test|live)_[0-9a-f]{32}$/.test(param)) {
+    var url = "https://pay-checkout.chromia.com/c/pay/" + param;
+    document.getElementById("link").href = url;
+    document.getElementById("fallback").hidden = false;
+    location.replace(url);
+  } else {
+    document.getElementById("msg").textContent = "No payment to open. Go back to the chat and tap Pay again.";
+  }
+</script>
+</body>
+</html>
