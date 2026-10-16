@@ -1,27 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff5fa2"/>
-      <stop offset="1" stop-color="#8b7cff"/>
-    </linearGradient>
-  </defs>
-  <!-- tile -->
-  <rect width="512" height="512" rx="112" fill="#0b0e1a"/>
+  <!-- Chromia brand: candy purple tile, warm off-white sticker with ink stroke and a hard shadow in the purple-800 twin. No gradients. -->
+  <rect width="512" height="512" rx="120" fill="#CC91F0"/>
+  <!-- shadow twin -->
+  <path transform="translate(14 14)" d="M116 118h280a40 40 0 0 1 40 40v168a40 40 0 0 1-40 40H236l-72 64v-64h-48a40 40 0 0 1-40-40V158a40 40 0 0 1 40-40z" fill="#9E5ECF"/>
   <!-- speech bubble = the question -->
-  <path d="M116 132h280a40 40 0 0 1 40 40v168a40 40 0 0 1-40 40H236l-72 64v-64h-48a40 40 0 0 1-40-40V172a40 40 0 0 1 40-40z" fill="url(#g)"/>
-  <!-- swarm = agent dots voting inside -->
-  <g fill="#0b0e1a">
-    <circle cx="186" cy="226" r="18"/>
-    <circle cx="256" cy="206" r="18"/>
-    <circle cx="326" cy="226" r="18"/>
-    <circle cx="221" cy="286" r="18"/>
-    <circle cx="291" cy="286" r="18"/>
+  <path d="M116 118h280a40 40 0 0 1 40 40v168a40 40 0 0 1-40 40H236l-72 64v-64h-48a40 40 0 0 1-40-40V158a40 40 0 0 1 40-40z" fill="#FFF8F8" stroke="#1F1A23" stroke-width="8"/>
+  <!-- swarm = agents voting, connected -->
+  <g stroke="#1F1A23" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M186 212L256 192L326 212M186 212L221 272L291 272L326 212M256 192L221 272M256 192L291 272"/>
   </g>
-  <g stroke="#0b0e1a" stroke-width="10" stroke-linecap="round" fill="none">
-    <path d="M186 226L256 206L326 226M186 226L221 286L291 286L326 226M256 206L221 286M256 206L291 286"/>
+  <g fill="#1F1A23">
+    <circle cx="186" cy="212" r="19"/><circle cx="256" cy="192" r="19"/><circle cx="326" cy="212" r="19"/>
+    <circle cx="221" cy="272" r="19"/><circle cx="291" cy="272" r="19"/>
   </g>
-  <!-- verified check -->
-  <circle cx="392" cy="372" r="58" fill="#0b0e1a"/>
-  <circle cx="392" cy="372" r="44" fill="#4ade80"/>
-  <path d="M368 372l16 16 32-34" stroke="#0b0e1a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- verified: green sticker with ink stroke, shadow twin -->
+  <circle cx="404" cy="378" r="60" fill="#4FCD4C" transform="translate(8 8)"/>
+  <circle cx="404" cy="378" r="60" fill="#93F091" stroke="#1F1A23" stroke-width="8"/>
+  <path d="M376 380l18 18 38-42" stroke="#1F1A23" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

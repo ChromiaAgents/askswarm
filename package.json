@@ -9,7 +9,7 @@
     "spike": "bun scripts/spike.ts",
     "approve": "bun scripts/approve-permit2.ts",
     "typecheck": "bunx tsc --noEmit",
-    "build": "bun build functions/telegram.ts functions/cpay-webhook.ts --outdir api --target node --format esm --entry-naming '[name].mjs'"
+    "build": "bun build functions/telegram.ts functions/cpay-webhook.ts --outdir dist --target node --format esm --entry-naming '[name].mjs'"
   },
   "dependencies": {
     "@x402/core": "2.28.0",
