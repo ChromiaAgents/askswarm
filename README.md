@@ -8,20 +8,95 @@ Built by EVAL Engine for the Identity MD hackathon, October 2026.
 
 ## How it works
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User (Telegram group)
+    participant B as AskSwarm bot<br/>(Vercel function)
+    participant P as Chromia Pay
+    participant I as IMD Intake<br/>(Ethereum / Sepolia)
+    participant S as IMD swarm<br/>(api.imd.fun)
+
+    U->>B: /ask Did Argentina win the 2022 World Cup?
+    B->>S: POST /requests/check (free)
+    S-->>B: normalized question, answerType, panel 15 / quorum 11
+    B-->>U: ❓ status card  [Ask free (Sepolia)] [Pay 2 CHR]
+    alt Pay in CHR
+        B->>P: payments.create(amount, metadata{chatId,msgId,question})
+        P-->>U: hosted checkout, pay from own wallet
+        P->>B: webhook payment.confirmed (HMAC signed)
+    else Free demo
+        U->>B: tap "Ask free"
+    end
+    B->>I: Intake.request(oracle.request, body, 0.5 IMD)
+    I-->>S: Requested event
+    B-->>U: ⏳ asked, tx 0x…  [Check status]
+    S->>S: panel of agents assesses, quorum vote
+    U->>B: tap "Check status"
+    B->>S: GET /intake/:chain/:tx → requestId
+    B->>S: GET /oracle/requests/:id/attestation
+    S-->>B: EIP-712 attestation + signature
+    B->>B: verifyTypedData (viem), pin signer
+    B-->>U: ✅ Yes · 15/15 agreed · verified  [attestation] [swarm job] [etherscan]
 ```
-/ask <question>        Telegram
-   │  POST /requests/check            free, returns the normalized question the panel will see
-   ▼
-status message         "❓ question · bool · panel 15, quorum 11"   [Ask free (Sepolia)] [Pay 2 CHR]
-   │  Chromia Pay checkout → payment.confirmed webhook   (or the free button)
-   ▼
-Intake.request(...)    one tx on Sepolia or Ethereum, 0.5 IMD, no API token, no x402
-   │  GET /intake/:chainId/:tx  → oracle requestId
-   │  GET /oracle/requests/:id  → attested | disagreed | ...
-   │  GET /oracle/requests/:id/attestation → EIP-712, verified offline with viem
-   ▼
-"✅ Yes · 15/15 agreed · EIP-712 verified · signer 0x5598aa91…"   [attestation] [swarm job] [etherscan]
+
+### Architecture
+
+```mermaid
+flowchart LR
+    subgraph TG[Telegram]
+        U[User]
+    end
+    subgraph V[Vercel, two functions]
+        T[api/telegram.ts<br/>grammy webhook]
+        W[api/cpay-webhook.ts<br/>HMAC verify]
+        L[lib/bot.ts<br/>stateless handlers]
+        T --> L
+        W --> L
+    end
+    subgraph CP[Chromia Pay]
+        C[Hosted checkout]
+        H[Signed webhooks]
+    end
+    subgraph ETH[Ethereum / Sepolia]
+        K[(Hot wallet<br/>gas + IMD only)]
+        IN[Intake v2<br/>0xa43e…de82]
+    end
+    subgraph IMD[IMD control plane]
+        CHK[/requests/check]
+        RD[/intake/:chain/:tx]
+        OR[/oracle/requests/:id]
+        AT[/attestation<br/>EIP-712/]
+    end
+    U <-->|/ask, buttons| T
+    L -->|payments.create| C
+    H -->|payment.confirmed| W
+    L -->|request(...)| IN
+    K -. signs .-> IN
+    IN -->|Requested event| RD
+    L --> CHK
+    L --> RD
+    L --> OR
+    L --> AT
+    L -->|verifyTypedData| L
 ```
+
+### State lives in the message, not a database
+
+```mermaid
+stateDiagram-v2
+    [*] --> Drafted: /ask → check ok
+    Drafted --> Asked: free button or payment.confirmed → Intake tx
+    Drafted --> Refused: check blockers
+    Asked --> Assessing: plane indexes tx, requestId known
+    Assessing --> Attested: quorum reached, signature published
+    Assessing --> NoConsensus: disagreed / blocked / mismatch / failed
+    Attested --> [*]: ✅ answer + verified signature posted
+    NoConsensus --> [*]: ⚠️ no refund, shown before paying
+```
+
+Line 1 of the status message is `❓ <question>`; once asked, a line `tx <chain> <0x…>` is appended.
+Every button handler re-derives its state from those two lines.
 
 No database. The status message carries the question and the tx hash; Chromia Pay metadata carries
 the chat and message ids. Runs as two Vercel functions: `api/telegram.ts`, `api/cpay-webhook.ts`.
