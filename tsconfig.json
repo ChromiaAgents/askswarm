@@ -4,5 +4,5 @@
     "strict": true, "skipLibCheck": true, "noEmit": true, "types": ["bun-types"],
     "allowImportingTsExtensions": true
   },
-  "include": ["scripts", "packages/*/src", "lib", "api"]
+  "include": ["scripts", "packages/*/src", "lib", "functions"]
 }

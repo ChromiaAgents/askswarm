@@ -1,7 +1,7 @@
 // DAY-1 GATE. bun scripts/spike.ts "Did Argentina win the 2022 FIFA World Cup?"
 // Exit 0 only when a verified attestation comes back. Costs 0.5 IMD per run.
 import { privateKeyToAccount } from "viem/accounts";
-import * as imd from "../packages/imd/src/index.ts";
+import * as imd from "../packages/imd/src/index";
 
 const question = process.argv.slice(2).join(" ").trim();
 if (!question) { console.error("usage: bun scripts/spike.ts <question>"); process.exit(2); }

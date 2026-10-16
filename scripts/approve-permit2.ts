@@ -3,7 +3,7 @@
 import { createPublicClient, createWalletClient, erc20Abi, formatEther, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
-import { IMD_TOKEN, PERMIT2 } from "../packages/imd/src/index.ts";
+import { IMD_TOKEN, PERMIT2 } from "../packages/imd/src/index";
 
 const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);
 const transport = http(process.env.ETH_RPC_URL);

@@ -2,8 +2,8 @@
 // Needs only Sepolia ETH for gas in EVM_PRIVATE_KEY's wallet. Exit 0 = verified attestation.
 import { formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import * as imd from "../packages/imd/src/index.ts";
-import * as intake from "../packages/imd/src/intake.ts";
+import * as imd from "../packages/imd/src/index";
+import * as intake from "../packages/imd/src/intake";
 
 const question = process.argv.slice(2).join(" ").trim() || "Did Argentina win the 2022 FIFA World Cup?";
 const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);

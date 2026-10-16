@@ -1,6 +1,6 @@
 // unpaid dry run: check -> quote -> 402 challenge -> build both signatures locally (no submit)
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
-import * as imd from "../packages/imd/src/index.ts";
+import * as imd from "../packages/imd/src/index";
 const token = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join("");
 const signer = privateKeyToAccount(generatePrivateKey());
 const chk = await imd.check("Did Argentina win the 2022 FIFA World Cup?", 15);

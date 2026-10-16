@@ -1,12 +1,15 @@
 {
   "name": "askswarm",
   "private": true,
-  "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "spike": "bun scripts/spike.ts",
     "approve": "bun scripts/approve-permit2.ts",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "bunx tsc --noEmit",
+    "build": "bun build functions/telegram.ts functions/cpay-webhook.ts --outdir api --target node --format esm --entry-naming '[name].mjs'"
   },
   "dependencies": {
     "@x402/core": "2.28.0",
@@ -18,5 +21,6 @@
     "@types/bun": "latest",
     "@vercel/node": "^24.0.2",
     "typescript": "^5.6.0"
-  }
+  },
+  "type": "module"
 }

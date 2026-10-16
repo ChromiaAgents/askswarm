@@ -3,9 +3,9 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { privateKeyToAccount } from "viem/accounts";
 import { decodeAbiParameters, type Hex } from "viem";
-import * as imd from "../packages/imd/src/index.ts";
-import * as intake from "../packages/imd/src/intake.ts";
-import { ChromiaPay } from "../packages/cpay/src/index.ts";
+import * as imd from "../packages/imd/src/index";
+import * as intake from "../packages/imd/src/intake";
+import { ChromiaPay } from "../packages/cpay/src/index";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
@@ -17,7 +17,8 @@ const MAX_Q = 500;
 export const account = () => privateKeyToAccount(env("EVM_PRIVATE_KEY") as Hex);
 export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.env.CPAY_SECRET_KEY, { baseUrl: process.env.CPAY_API_URL }) : null;
 
-export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"));
+// Native fetch: grammy defaults to node-fetch v2 on Node, which breaks when bundled and hangs every call.
+export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"), { client: { fetch: globalThis.fetch as any } });
 
 const esc = (s: unknown) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
 const chainName = (id: number) => (id === 1 ? "Ethereum" : "Sepolia");

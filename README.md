@@ -1,6 +1,6 @@
 # AskSwarm
 
-![What AskSwarm does: ask in Telegram, pay in CHR, the IMD swarm votes, you get an EIP-712 signed answer](docs/askswarm.svg)
+![What AskSwarm does: ask in Telegram, pay in CHR, the IMD swarm votes, you get an EIP-712 signed answer](docs/askswarm.png)
 
 Telegram bot: ask a factual question in chat, the [IMD](https://imd.fun) agent swarm answers it
 with an EIP-712 signed attestation, verified by the bot and linked back to the swarm job and the
@@ -145,8 +145,9 @@ for `payment.confirmed` and `payment.overpaid`, paste the key and `whsec_` into 
 
 ```
 lib/bot.ts                  grammy handlers: /ask, free, chk
-api/telegram.ts             Telegram webhook
-api/cpay-webhook.ts         Chromia Pay webhook → ask the swarm
+functions/telegram.ts       Telegram webhook (bundled by `bun run build` into api/*.mjs for Vercel)
+functions/cpay-webhook.ts   Chromia Pay webhook → ask the swarm
+docs/brand/                 infographic source (HTML + Chromia brand fonts), rendered to docs/askswarm.png
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
 packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)

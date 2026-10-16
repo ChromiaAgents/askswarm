@@ -1,5 +1,5 @@
 import { webhookCallback } from "grammy";
-import { bot } from "../lib/bot.ts";
+import { bot } from "../lib/bot";
 
 const handler = webhookCallback(bot, "std/http", { secretToken: process.env.TELEGRAM_WEBHOOK_SECRET });
 

@@ -5,7 +5,7 @@ import {
   type Hex, type PrivateKeyAccount,
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
-import { IMD_API, ImdError, type OracleRequestBody } from "./index.ts";
+import { IMD_API, ImdError, type OracleRequestBody } from "./index";
 
 export const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82" as const; // Intakev2, same on every chain
 export const PRICE = 500000000000000000n; // 0.5 IMD

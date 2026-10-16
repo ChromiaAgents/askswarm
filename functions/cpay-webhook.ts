@@ -1,5 +1,5 @@
-import { isPaid } from "../packages/cpay/src/index.ts";
-import { askAndMark, cpay, ASK_CHAIN } from "../lib/bot.ts";
+import { isPaid } from "../packages/cpay/src/index";
+import { askAndMark, cpay, ASK_CHAIN } from "../lib/bot";
 
 export async function POST(req: Request): Promise<Response> {
   const pay = cpay();
