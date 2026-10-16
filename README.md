@@ -104,7 +104,24 @@ No database. The status message carries the question and the tx hash; Chromia Pa
 the chat and message ids. Runs as two Vercel functions: `api/telegram.ts`, `api/cpay-webhook.ts`.
 
 Honest framing: this is a relay. The house wallet pays IMD, the attestation is addressed to it, and
-IMD refunds nothing when a panel ends without consensus (~4% live). The bot says so before payment.
+IMD refunds nothing when a panel ends without consensus. The bot says so before payment.
+
+### Split risk, from the Eval Engine dataset
+
+Before the Pay button, the card shows the chance this exact request ends without consensus, scored
+by a model trained on [evalengine/imd-oracle-outcomes](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes)
+(7.8k IMD oracle requests, label = attested or disagreed). Hashed logistic regression over request
+shape only (answer type, panel size, quorum ratio, length, moving-target and future wording, missing
+answer format, pinned window). Word n-grams were dropped: they overfit (test AUC 0.55 vs 0.75).
+
+| split (2026-10-13) | n | disagreed | AUC |
+|---|---|---|---|
+| validation | 1349 | 6 | 0.87 |
+| test | 381 | 70 | 0.73 |
+
+Zero runtime cost, 50 KB of weights, lands near the LLM baselines on the dataset card (F1 0.4–0.5 for
+Haiku/Sonnet/GLM at the same task). High risk also prints why: no answer format, asks two things,
+moving target, future date. Retrain: `bun run train:risk <dir with the snapshot jsonl files>`.
 
 ## Run the gate
 
@@ -145,13 +162,14 @@ for `payment.confirmed` and `payment.overpaid`, paste the key and `whsec_` into 
 
 ```
 lib/bot.ts                  grammy handlers: /ask, free, chk
+lib/risk.ts                 split-risk model (features, predict, hints); weights in lib/risk-model.json
 functions/telegram.ts       Telegram webhook (bundled by `bun run build` into api/*.mjs for Vercel)
 functions/cpay-webhook.ts   Chromia Pay webhook → ask the swarm
 docs/brand/                 infographic source (HTML + Chromia brand fonts), rendered to docs/askswarm.png
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
 packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
-scripts/                    spike-sepolia.ts (free gate), spike.ts (mainnet), dry-run.ts, approve-permit2.ts
+scripts/                    spike-sepolia.ts (free gate), spike.ts (mainnet), dry-run.ts, approve-permit2.ts, train-risk.ts
 ```
 
 ## Security

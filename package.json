@@ -9,6 +9,7 @@
     "spike": "bun scripts/spike.ts",
     "approve": "bun scripts/approve-permit2.ts",
     "typecheck": "bunx tsc --noEmit",
+    "train:risk": "bun scripts/train-risk.ts",
     "build": "bun build functions/telegram.ts functions/cpay-webhook.ts --outdir dist --target node --format esm --entry-naming '[name].mjs'"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import { decodeAbiParameters, type Hex } from "viem";
 import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
+import * as risk from "./risk";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
@@ -44,7 +45,12 @@ bot.command("ask", async (ctx) => {
   }
   const r = chk.request;
   // User pays for the normalized question the panel will actually see, so show that, not their text.
-  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\nYou buy the panel, not the answer: ~4% of questions end without consensus and are not refunded.`;
+  // Disagreement risk from the Eval Engine dataset (evalengine/imd-oracle-outcomes): shown before the
+  // user pays, since a split panel is not refunded.
+  const p = risk.predict(r), lvl = risk.riskLabel(p), why = risk.hints(r);
+  const riskLine = `${lvl === "low" ? "🟢" : lvl === "medium" ? "🟡" : "🔴"} Split risk ${lvl} (${Math.round(p * 100)}%)` +
+    (why.length && lvl !== "low" ? `\n<i>${why.map(esc).join("; ")}</i>` : "");
+  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\n${riskLine}\nYou buy the panel, not the answer: a split panel is not refunded.`;
   const kb = new InlineKeyboard();
   if (intake.CHAINS[ASK_CHAIN].free) kb.text("Ask free (Sepolia)", "free");
   const status = await ctx.reply(text, { parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
