@@ -1,0 +1,22 @@
+{
+  "name": "askswarm",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "spike": "bun scripts/spike.ts",
+    "approve": "bun scripts/approve-permit2.ts",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@x402/core": "2.28.0",
+    "@x402/evm": "2.28.0",
+    "grammy": "1.46.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@vercel/node": "^24.0.2",
+    "typescript": "^5.6.0"
+  }
+}
