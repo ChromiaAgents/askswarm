@@ -103,10 +103,10 @@ bot.command("ask", async (ctx) => {
   // one-liner from a single model. The paid swarm below is the escalation, not the default.
   const [cost, prior, quick] = await Promise.all([imdCostLine(), Promise.resolve(recall(r.question)), quickTake(r.question)]);
   const free = [
-    prior ? `♻️ Swarm already attested this on ${prior.at.slice(0, 10)}: <b>${esc(prior.a)}</b> <i>(${prior.agreed}/${prior.panel} agreed)</i> · <a href="${imd.IMD_API}/oracle/requests/${prior.id}/attestation">attestation</a>` : "",
-    quick ? `💬 Quick take, unsigned AI: <i>${esc(quick)}</i>` : "",
+    prior ? `✅ <b>${esc(prior.a)}</b>  <i>free, instant</i>\n<i>Swarm attested this on ${prior.at.slice(0, 10)}, ${prior.agreed}/${prior.panel} agreed · <a href="${imd.IMD_API}/oracle/requests/${prior.id}/attestation">signed attestation</a></i>` : "",
+    quick ? `💬 <b>${esc(quick)}</b>  <i>free, unsigned AI guess</i>` : "",
   ].filter(Boolean).join("\n");
-  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n${free ? `\n${free}\n` : ""}\n${riskLine}\n${free ? "Need a fresh signed verdict? " : ""}You buy the panel, not the answer: it costs ${esc(cost)} and a split panel is not refunded.`;
+  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n${free ? `\n${free}\n` : ""}\n${riskLine}\n${free ? "Want a fresh signed verdict instead? " : ""}You buy the panel, not the answer: it costs ${esc(cost)} and a split panel is not refunded.`;
   const kb = new InlineKeyboard();
   if (canAskFree(ctx)) {
     const p = await spot("imd");
