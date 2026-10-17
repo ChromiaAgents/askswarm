@@ -1,5 +1,6 @@
-// FREE GATE on Sepolia. bun scripts/spike-sepolia.ts "Did Argentina win the 2022 FIFA World Cup?"
-// Needs only Sepolia ETH for gas in EVM_PRIVATE_KEY's wallet. Exit 0 = verified attestation.
+// Onchain-door gate. bun scripts/spike-sepolia.ts "Did Argentina win the 2022 FIFA World Cup?"
+// Sepolia by default (free, mints IMDtest). SPIKE_CHAIN=1 runs the same path on mainnet: costs 0.5 IMD + gas.
+// Exit 0 = verified attestation.
 import { formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import * as imd from "../packages/imd/src/index";
@@ -7,13 +8,13 @@ import * as intake from "../packages/imd/src/intake";
 
 const question = process.argv.slice(2).join(" ").trim() || "Did Argentina win the 2022 FIFA World Cup?";
 const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);
-const CHAIN = 11155111 as const;
+const CHAIN = Number(process.env.SPIKE_CHAIN ?? 11155111) as intake.IntakeChainId;
 const t0 = Date.now();
 const step = (s: string, v?: unknown) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${s}`, v === undefined ? "" : JSON.stringify(v).slice(0, 1000));
 
 const { pub, cfg } = intake.clients(CHAIN, account);
 const eth = await pub.getBalance({ address: account.address });
-step("wallet", { address: account.address, sepoliaEth: formatEther(eth) });
+step("wallet", { chain: CHAIN, address: account.address, eth: formatEther(eth) });
 if (eth === 0n) { console.error("fund Sepolia ETH first: https://cloud.google.com/application/web3/faucet/ethereum/sepolia"); process.exit(2); }
 
 const chk = await imd.check(question, Number(process.env.IMD_PANEL_SIZE ?? 15));
@@ -21,7 +22,7 @@ if (chk.blockers?.length || !chk.request) { step("BLOCKED", chk); process.exit(1
 step("check ok", chk.request);
 
 const bal = await pub.readContract({ address: cfg.imd, abi: (await import("viem")).erc20Abi, functionName: "balanceOf", args: [account.address] });
-if (bal < intake.PRICE) step("minted IMDtest", await intake.mintTest(CHAIN, account));
+if (bal < intake.PRICE) { if (!intake.CHAINS[CHAIN].free) { console.error("need 0.5 IMD"); process.exit(2); } step("minted IMDtest", await intake.mintTest(CHAIN, account)); }
 const ap = await intake.ensureAllowance(CHAIN, account);
 step("allowance", ap ?? "already ok");
 
@@ -45,5 +46,5 @@ if (outcome.status !== "attested") process.exit(1);
 const att = await imd.pollUntil(() => imd.attestation(requestId!), (a) => a !== null, { every: 5000, timeoutMs: 5 * 60_000 });
 const valid = await imd.verifyAttestation(att!);
 step("attestation", { valid, signer: att!.signer, answer: att!.message.answer, figure: att!.message.figure, agreed: att!.message.agreed, quorum: att!.message.quorum });
-console.log(`tx: https://sepolia.etherscan.io/tx/${tx}\nattestation: ${imd.IMD_API}/oracle/requests/${requestId}/attestation`);
+console.log(`tx: https://${CHAIN === 1 ? "" : "sepolia."}etherscan.io/tx/${tx}\nattestation: ${imd.IMD_API}/oracle/requests/${requestId}/attestation`);
 process.exit(valid ? 0 : 1);
