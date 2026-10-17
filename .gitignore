@@ -3,3 +3,8 @@ node_modules
 .vercel
 .env*
 dist/
+
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
