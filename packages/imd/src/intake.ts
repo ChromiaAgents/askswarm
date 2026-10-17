@@ -21,6 +21,18 @@ export const intakeAbi = parseAbi([
 const mintAbi = parseAbi(["function mint(address to, uint256 amount)"]);
 export const ACTION_ID = stringToHex("oracle.request@oracle-1", { size: 32 });
 
+// AskSwarmRegistry (contracts/src/AskSwarmRegistry.sol): pays Intake with itself as callback and keeps
+// every verified answer onchain. When REGISTRY_ADDRESS is set, paid asks go through it instead of
+// calling Intake directly, so each answer the bot buys becomes public, verifiable memory.
+export const REGISTRY = (process.env.REGISTRY_ADDRESS || null) as Hex | null;
+export const registryAbi = parseAbi([
+  "function ask(bytes body) returns (bytes32 requestId)",
+  "function price() view returns (uint256)",
+  "function latestFor(bytes32 questionHash) view returns (bytes32)",
+  "function get(bytes32 requestId) view returns ((address asker, uint64 askedAt, uint8 status) k, (bytes32 questionHash, bytes answer, bytes32 answerHash, uint8 answerType, uint16 panelSize, uint16 quorum, uint16 agreed, uint64 issuedAt, uint64 expiresAt, bool verified) a)",
+  "function answerOf(bytes32 questionHash) view returns (bytes32 requestId, (bytes32 questionHash, bytes answer, bytes32 answerHash, uint8 answerType, uint16 panelSize, uint16 quorum, uint16 agreed, uint64 issuedAt, uint64 expiresAt, bool verified) a)",
+]);
+
 export function clients(chainId: IntakeChainId, account: PrivateKeyAccount) {
   const c = CHAINS[chainId];
   const transport = http(process.env[c.rpcEnv]);
@@ -40,12 +52,13 @@ export async function mintTest(chainId: IntakeChainId, account: PrivateKeyAccoun
   return hash;
 }
 
-/** Approve intake to pull IMD. Idempotent: skips when allowance already covers `cap`. */
+/** Approve the payee (Intake, or the registry when set) to pull IMD. Idempotent. */
 export async function ensureAllowance(chainId: IntakeChainId, account: PrivateKeyAccount, cap = PRICE * 20n) {
   const { cfg, pub, wallet } = clients(chainId, account);
-  const allowance = await pub.readContract({ address: cfg.imd, abi: erc20Abi, functionName: "allowance", args: [account.address, INTAKE] });
+  const spender = REGISTRY ?? INTAKE;
+  const allowance = await pub.readContract({ address: cfg.imd, abi: erc20Abi, functionName: "allowance", args: [account.address, spender] });
   if (allowance >= cap) return null;
-  const hash = await wallet.writeContract({ address: cfg.imd, abi: erc20Abi, functionName: "approve", args: [INTAKE, cap] });
+  const hash = await wallet.writeContract({ address: cfg.imd, abi: erc20Abi, functionName: "approve", args: [spender, cap] });
   await pub.waitForTransactionReceipt({ hash });
   return hash;
 }
@@ -54,9 +67,13 @@ export async function ensureAllowance(chainId: IntakeChainId, account: PrivateKe
 export const requestArgs = (chainId: IntakeChainId, body: OracleRequestBody) =>
   [ACTION_ID, stringToHex(JSON.stringify(body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, CHAINS[chainId].imd, PRICE] as const;
 
-/** Pays 0.5 IMD and asks. Returns tx hash; the plane indexes it at GET /intake/:chainId/:tx. */
+/** Pays 0.5 IMD and asks. Returns tx hash; the plane indexes it at GET /intake/:chainId/:tx.
+ *  Through the registry when REGISTRY_ADDRESS is set (same Requested event, callback = registry). */
 export async function ask(chainId: IntakeChainId, account: PrivateKeyAccount, body: OracleRequestBody): Promise<Hex> {
   const { wallet } = clients(chainId, account);
+  if (REGISTRY) {
+    return wallet.writeContract({ address: REGISTRY, abi: registryAbi, functionName: "ask", args: [stringToHex(JSON.stringify(body))] });
+  }
   // ponytail: no nonce manager; one hot wallet, low volume. Add viem nonceManager if webhooks ever overlap.
   return wallet.writeContract({
     address: INTAKE, abi: intakeAbi, functionName: "request",
@@ -88,4 +105,13 @@ export function oracleRequestIdFrom(r: { entries: IntakeEntry[] } | null): strin
   if (!e) return null;
   if (e.state === "refused" || e.admission?.result?.kind === "refused") throw new Error(`intake refused: ${e.reason ?? JSON.stringify(e.admission?.result?.problems ?? e.detail)}`);
   return e.admission?.result?.requestId ?? null;
+}
+
+/** Onchain memory: the registry's latest verified answer for a question hash, or null. */
+export async function registryAnswer(chainId: IntakeChainId, questionHash: Hex) {
+  if (!REGISTRY) return null;
+  const c = CHAINS[chainId];
+  const pub = createPublicClient({ chain: c.chain, transport: http(process.env[c.rpcEnv]) });
+  const [requestId, a] = await pub.readContract({ address: REGISTRY, abi: registryAbi, functionName: "answerOf", args: [questionHash] });
+  return a.verified ? { requestId, ...a } : null;
 }

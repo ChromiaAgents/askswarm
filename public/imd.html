@@ -39,6 +39,7 @@
   const $ = (id) => document.getElementById(id);
   const log = (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; $("log").appendChild(d); };
   const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
+  const registryAbi = parseAbi(["function ask(bytes body) returns (bytes32)"]);
 
   $("q").textContent = params.q || "Missing question. Go back to Telegram and tap the button again.";
   if (!params.q) throw new Error("no params");
@@ -67,21 +68,25 @@
       if ((await wallet.getChainId()) !== 1) { btn.textContent = "Switch to Ethereum…"; await wallet.switchChain({ id: 1 }); }
 
       const amount = BigInt(draft.amount);
+      // Through AskSwarmRegistry when deployed: the answer then lands onchain, verified, for everyone.
+      const spender = draft.registry || draft.intake;
       const [bal, allowance] = await Promise.all([
         pub.readContract({ address: draft.asset, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
-        pub.readContract({ address: draft.asset, abi: erc20Abi, functionName: "allowance", args: [account, draft.intake] }),
+        pub.readContract({ address: draft.asset, abi: erc20Abi, functionName: "allowance", args: [account, spender] }),
       ]);
       if (bal < amount) { log(`You hold ${formatUnits(bal, 18)} IMD, need 0.5.`, "err"); btn.textContent = "Not enough IMD"; return; }
 
       if (allowance < amount) {
         btn.textContent = "Approve 0.5 IMD…";
-        const h = await wallet.writeContract({ account, address: draft.asset, abi: erc20Abi, functionName: "approve", args: [draft.intake, amount] });
+        const h = await wallet.writeContract({ account, address: draft.asset, abi: erc20Abi, functionName: "approve", args: [spender, amount] });
         log("Approve sent, waiting…"); await pub.waitForTransactionReceipt({ hash: h }); log("Approved.", "ok");
       }
 
       btn.textContent = "Confirm request in wallet…";
-      const tx = await wallet.writeContract({ account, address: draft.intake, abi: intakeAbi, functionName: "request",
-        args: [draft.args.action, draft.args.body, draft.args.callback, draft.asset, amount] });
+      const tx = draft.registry
+        ? await wallet.writeContract({ account, address: draft.registry, abi: registryAbi, functionName: "ask", args: [draft.args.body] })
+        : await wallet.writeContract({ account, address: draft.intake, abi: intakeAbi, functionName: "request",
+            args: [draft.args.action, draft.args.body, draft.args.callback, draft.asset, amount] });
       log(`Request sent: ${tx.slice(0, 10)}… waiting for confirmation.`);
       const rcpt = await pub.waitForTransactionReceipt({ hash: tx });
       if (rcpt.status !== "success") { log("Transaction reverted.", "err"); btn.textContent = "Reverted"; return; }

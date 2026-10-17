@@ -25,7 +25,8 @@ export async function GET(req: Request) {
   const chk = await imd.check(a.q, PANEL);
   if (!chk.request || chk.blockers?.length) return json({ error: "blocked", blockers: chk.blockers }, 409);
   const [action, body, callback, asset, amount] = intake.requestArgs(1, chk.request);
-  return json({ request: chk.request, intake: intake.INTAKE, asset, amount: amount.toString(), args: { action, body, callback } });
+  // With a registry the wallet calls registry.ask(body) and approves the registry; without, Intake directly.
+  return json({ request: chk.request, intake: intake.INTAKE, registry: intake.REGISTRY, asset, amount: amount.toString(), args: { action, body, callback } });
 }
 
 export async function POST(req: Request) {
@@ -37,10 +38,19 @@ export async function POST(req: Request) {
 
   const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
   const [t, r] = await Promise.all([pub.getTransaction({ hash: tx }), pub.getTransactionReceipt({ hash: tx })]);
-  if (r.status !== "success" || t.to?.toLowerCase() !== intake.INTAKE) return json({ error: "not_an_intake_tx" }, 422);
-  const d = decodeFunctionData({ abi: intake.intakeAbi, data: t.input });
-  if (d.functionName !== "request" || d.args[0] !== intake.ACTION_ID) return json({ error: "not_oracle_request" }, 422);
-  let body: any; try { body = JSON.parse(hexToString(d.args[1] as Hex)); } catch { return json({ error: "bad_body" }, 422); }
+  const to = t.to?.toLowerCase();
+  let bodyHex: Hex;
+  if (intake.REGISTRY && to === intake.REGISTRY.toLowerCase()) {
+    const d = decodeFunctionData({ abi: intake.registryAbi, data: t.input });
+    if (d.functionName !== "ask") return json({ error: "not_oracle_request" }, 422);
+    bodyHex = d.args[0] as Hex;
+  } else if (to === intake.INTAKE) {
+    const d = decodeFunctionData({ abi: intake.intakeAbi, data: t.input });
+    if (d.functionName !== "request" || d.args[0] !== intake.ACTION_ID) return json({ error: "not_oracle_request" }, 422);
+    bodyHex = d.args[1] as Hex;
+  } else return json({ error: "not_an_intake_tx" }, 422);
+  if (r.status !== "success") return json({ error: "tx_failed" }, 422);
+  let body: any; try { body = JSON.parse(hexToString(bodyHex)); } catch { return json({ error: "bad_body" }, 422); }
   if (body.question !== a.q) return json({ error: "question_mismatch" }, 422);
 
   await markAsked(a.c, a.m, a.q, 1, tx, Number(body.panelSize) || PANEL, ` from ${t.from.slice(0, 6)}…${t.from.slice(-4)}`);
