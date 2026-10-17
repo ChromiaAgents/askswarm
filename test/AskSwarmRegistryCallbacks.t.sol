@@ -278,8 +278,8 @@ contract AskSwarmRegistryCallbacksTest is RegistryTestSupport {
         assertEq(registry.latestFor(QUESTION), bytes32(0));
     }
 
-    /// This is the Intake transport's once-only guarantee, not a claim that the registry has
-    /// a local Pending guard. The transport records completion before attempting a callback.
+    /// The Intake transport's once-only guarantee: it records completion before attempting a
+    /// callback. The registry's own Pending guard is tested separately below.
     function test_transportWillNotRetrySuccessOrFailure() public {
         bytes32 successful = _store("answer", 15, 11, 11, START + 1 days);
         bytes32 failed = _ask();
@@ -327,11 +327,202 @@ contract AskSwarmRegistryCallbacksTest is RegistryTestSupport {
         assertEq(k.asker, address(0));
         assertFalse(a.verified);
         assertEq(a.answer.length, 0);
+        assertEq(a.answerHash, bytes32(0), "unknown id must not hash as an empty answer");
         assertFalse(registry.isCurrent(QUESTION));
-        (bytes32 id,) = registry.answerOf(QUESTION);
+        (bytes32 id, AskSwarmRegistry.Answer memory byQuestion) = registry.answerOf(QUESTION);
         assertEq(id, bytes32(0));
+        assertEq(byQuestion.answerHash, bytes32(0));
         (id,) = registry.answerOf(QUESTION, 1, 1);
         assertEq(id, bytes32(0));
+    }
+
+    /// Audit finding 77599b52: a record with no stored answer (Pending, Refused, NoResult, over the
+    /// answer cap) reads back with answerHash zero, so "never answered" and "answered with empty
+    /// bytes" are distinguishable: the latter hashes as keccak256("").
+    function test_recordsWithoutAStoredAnswerReportZeroAnswerHash() public {
+        bytes32 pending = _ask();
+        bytes32 refused = _ask();
+        _fail(refused, 1, bytes32("body_invalid"), 0, 0);
+        bytes32 split = _ask();
+        _fail(split, 2, bytes32("disagreed"), 7, 14);
+        bytes32 overCap = _ask();
+        OracleAttestation memory big = _attestation(overCap, new bytes(4097));
+        _deliver(overCap, big, _sign(big));
+
+        bytes32[4] memory ids = [pending, refused, split, overCap];
+        AskSwarmRegistry.Status[4] memory statuses = [
+            AskSwarmRegistry.Status.Pending,
+            AskSwarmRegistry.Status.Refused,
+            AskSwarmRegistry.Status.NoResult,
+            AskSwarmRegistry.Status.Unverified
+        ];
+        for (uint256 i; i < ids.length; ++i) {
+            (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory a) = registry.get(ids[i]);
+            assertEq(uint8(k.status), uint8(statuses[i]));
+            assertEq(a.answerHash, bytes32(0), "no stored answer must read as a zero hash");
+            assertEq(a.answer.length, 0);
+            assertFalse(a.verified);
+        }
+        assertEq(registry.latestFor(QUESTION), bytes32(0));
+
+        // A delivered empty answer is a stored answer: it hashes as the empty byte string.
+        bytes32 empty = _ask();
+        OracleAttestation memory a0 = _attestation(empty, "");
+        _deliver(empty, a0, _sign(a0));
+        _assertStored(empty, a0);
+        (, AskSwarmRegistry.Answer memory stored) = registry.get(empty);
+        assertEq(stored.answerHash, keccak256(""));
+        (bytes32 held, AskSwarmRegistry.Answer memory byQuestion) = registry.answerOf(QUESTION);
+        assertEq(held, empty);
+        assertEq(byQuestion.answerHash, keccak256(""));
+
+        // An unverified delivery that still fits the cap is stored, so its hash is the answer's.
+        bytes32 tampered = _ask();
+        OracleAttestation memory t = _attestation(tampered, "CHF");
+        bytes memory signature = _sign(t);
+        t.figure ^= 1;
+        _deliver(tampered, t, signature);
+        _assertUnverified(tampered, t.answer);
+    }
+
+    /// Audit finding 1b549341, as reported: the live Intake v2 forwards a status-0 completion's
+    /// arguments to the callback unchecked, so the completion of a still-open request could name a
+    /// settled id. The registry refuses it: the settled record, its index and `isCurrent` are
+    /// untouched, and the open request stays Pending here (Intake marked it completed with
+    /// someone else's arguments; that is the writer's error, not a second answer).
+    function test_settledAskIsNotRewrittenByAnotherRequestsCompletion() public {
+        bytes32 first = _store("CHF", 15, 11, 11, START + 1 days);
+        assertEq(registry.latestFor(QUESTION), first);
+        (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory a) = registry.get(first);
+        bytes32 before = keccak256(abi.encode(k, a));
+
+        // 1. a signed replacement answer for the settled id, through a second open request
+        bytes32 second = _ask();
+        OracleAttestation memory b = _attestation(first, "EUR");
+        bytes memory sb = _sign(b);
+        vm.prank(writer);
+        assertFalse(intake.complete(second, 0, abi.encode(first, b, sb)), "replay must not be delivered");
+        (k, a) = registry.get(first);
+        assertEq(keccak256(abi.encode(k, a)), before, "settled record changed");
+        assertEq(a.answer, bytes("CHF"));
+
+        // 2. the variant that flipped `verified` in place: an empty 65-byte signature
+        bytes32 third = _ask();
+        vm.prank(writer);
+        assertFalse(intake.complete(third, 0, abi.encode(first, b, new bytes(65))));
+        (k, a) = registry.get(first);
+        assertEq(keccak256(abi.encode(k, a)), before, "settled record changed");
+        assertTrue(a.verified);
+        assertEq(registry.latestFor(QUESTION), first);
+        assertTrue(registry.isCurrent(QUESTION));
+        (bytes32 held, AskSwarmRegistry.Answer memory current) = registry.answerOf(QUESTION, 0, 0);
+        assertEq(held, first);
+        assertTrue(current.verified);
+
+        // 3. the open requests the replays rode on are completed in Intake but not settled here:
+        // the registry never saw an answer for them
+        (AskSwarmRegistry.Ask memory ks,) = registry.get(second);
+        assertEq(uint8(ks.status), uint8(AskSwarmRegistry.Status.Pending), "open request is not settled by the replay");
+        (ks,) = registry.get(third);
+        assertEq(uint8(ks.status), uint8(AskSwarmRegistry.Status.Pending));
+        assertTrue(intake.requestInfo(second).completed);
+        assertFalse(intake.requestInfo(second).delivered);
+    }
+
+    /// Audit finding 1b549341: every settled status is final for both hooks, whoever Intake relays.
+    function test_bothHooksRefuseEverySettledStatus() public {
+        bytes32 answered = _store("answered", 15, 11, 11, START + 1 days);
+        bytes32 unverified = _ask();
+        OracleAttestation memory u = _attestation(unverified, "tampered");
+        bytes memory su = _sign(u);
+        u.agreed ^= 1;
+        _deliver(unverified, u, su);
+        bytes32 overCap = _ask();
+        OracleAttestation memory big = _attestation(overCap, new bytes(4097));
+        _deliver(overCap, big, _sign(big));
+        bytes32 refused = _ask();
+        _fail(refused, 1, bytes32("body_refused"), 0, 0);
+        bytes32 split = _ask();
+        _fail(split, 2, bytes32("disagreed"), 9, 15);
+
+        bytes32[5] memory ids = [answered, unverified, overCap, refused, split];
+        for (uint256 i; i < ids.length; ++i) {
+            (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory a) = registry.get(ids[i]);
+            assertTrue(k.status != AskSwarmRegistry.Status.Pending, "fixture is settled");
+            bytes32 before = keccak256(abi.encode(k, a));
+            OracleAttestation memory again = _attestation(ids[i], "again");
+            bytes memory signature = _sign(again);
+            vm.prank(address(intake));
+            vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, ids[i]));
+            registry.onOracleResult(ids[i], again, signature);
+            vm.prank(address(intake));
+            vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, ids[i]));
+            registry.onFailure(ids[i], 2, bytes32("disagreed"), 0, 0, "");
+            vm.prank(address(intake));
+            vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, ids[i]));
+            registry.onFailure(ids[i], 1, bytes32("body_invalid"), 0, 0, "");
+            (k, a) = registry.get(ids[i]);
+            assertEq(keccak256(abi.encode(k, a)), before, "settled record changed");
+        }
+        assertEq(registry.latestFor(QUESTION), answered);
+        // an unknown id is still UnknownAsk, not AlreadySettled
+        bytes32 unknown = keccak256("never asked");
+        vm.prank(address(intake));
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.UnknownAsk.selector, unknown));
+        registry.onFailure(unknown, 1, bytes32("body_invalid"), 0, 0, "");
+    }
+
+    /// Audit finding d8368ddd: `issuedAt` may sit at most ISSUED_AT_TOLERANCE (5 minutes, the
+    /// protocol consumer's) ahead of the chain clock. Exactly at the tolerance is verified; one
+    /// second past is recorded Unverified and never indexed, however far off its expiry is.
+    function test_issuedAtToleranceBoundary() public {
+        assertEq(registry.ISSUED_AT_TOLERANCE(), 5 minutes);
+        bytes32 atLimit = _ask();
+        OracleAttestation memory a = _attestation(atLimit, "CHF");
+        a.issuedAt = START + 5 minutes;
+        _deliver(atLimit, a, _sign(a));
+        _assertStored(atLimit, a);
+
+        bytes32 past = _ask();
+        OracleAttestation memory b = _attestation(past, "EUR");
+        b.issuedAt = START + 5 minutes + 1;
+        b.expiresAt = START + 366 days;
+        _deliver(past, b, _sign(b));
+        _assertUnverified(past, b.answer);
+        assertEq(registry.latestFor(QUESTION), atLimit, "pre-dated answer must not displace a current one");
+
+        // the audit's exact scenario, with nothing held for its question
+        bytes32 year = _ask();
+        OracleAttestation memory c = _attestation(year, "CHF");
+        c.questionHash = keccak256("another question");
+        c.issuedAt = START + 365 days;
+        c.expiresAt = START + 366 days;
+        _deliver(year, c, _sign(c));
+        _assertUnverified(year, c.answer);
+        assertEq(registry.latestFor(c.questionHash), bytes32(0), "pre-dated answer indexed");
+        assertFalse(registry.isCurrent(c.questionHash));
+        (, AskSwarmRegistry.Answer memory recorded) = registry.get(year);
+        assertEq(recorded.issuedAt, c.issuedAt, "recorded for the record");
+    }
+
+    /// forge-config: default.fuzz.runs = 1000
+    function testFuzz_verifiedRequiresIssuedAtWithinTolerance(uint32 aheadSeed, uint32 lateSeed) public {
+        uint64 ahead = uint64(bound(aheadSeed, 0, 1 days));
+        uint64 late = uint64(bound(lateSeed, 0, 1 days));
+        bytes32 id = _ask();
+        OracleAttestation memory a = _attestation(id, hex"01");
+        a.issuedAt = START + ahead;
+        a.expiresAt = START + 2 days;
+        bytes memory signature = _sign(a);
+        vm.warp(START + late);
+        _deliver(id, a, signature);
+        bool ok = ahead <= late + 5 minutes;
+        (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory ans) = registry.get(id);
+        assertEq(ans.verified, ok);
+        assertEq(uint8(k.status), uint8(ok ? AskSwarmRegistry.Status.Answered : AskSwarmRegistry.Status.Unverified));
+        assertEq(registry.latestFor(QUESTION) == id, ok);
+        assertEq(ans.issuedAt, a.issuedAt);
+        assertEq(ans.answerHash, keccak256(a.answer));
     }
 
     function test_bothPanelSizeAndAgreementMustBeAtLeastAsStrong() public {

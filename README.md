@@ -212,16 +212,22 @@ Paid answers do not stop in the chat. With `REGISTRY_ADDRESS` set, every paid as
 [AskSwarmRegistry](src/AskSwarmRegistry.sol): the contract pays Intake v2
 with itself as callback, verifies the swarm's EIP-712 attestation onchain, and stores the answer by
 question hash. Any contract or client can then read what the swarm attested, free, with the proof.
-The registry was launched through the IMD protocol itself: [launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa)
-(swarm audit of the import, adaptation, tests, four specialist audits, judge, deploy), job
-[64fa31ee](https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852). What the swarm changed
-and why is in [contracts/ADAPTATION.md](contracts/ADAPTATION.md); `src/` and `test/` here are the
-accepted versions.
+The registry was launched through the IMD protocol itself, twice. [Launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa)
+audited the import, adapted it (constructor call removed, expiry folded into `verified`,
+strict-majority index gate) and deployed. [Launch #2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb)
+started from that accepted code and found more: a replay hole where a settled ask could be
+re-delivered with another request's completion, future-dated attestations, index starvation behind
+an expired answer. It fixed them and added `askAtMost`, `reindex` and `markLost`. Each round's
+notes: [contracts/ADAPTATION.md](contracts/ADAPTATION.md), [contracts/ADAPTATION-2099.md](contracts/ADAPTATION-2099.md).
+`src/` and `test/` here are the #2099 accepted versions.
 
 | chain | AskSwarmRegistry |
 |---|---|
-| Ethereum mainnet (swarm-deployed, verified) | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
+| Ethereum mainnet, current (launch #2099) | [`0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) |
+| Ethereum mainnet, first (launch #2088), 10 answers on record | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
 | Sepolia (self-deployed, pre-audit build) | `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900` |
+
+The explorer at [/answers](https://askswarm-nine.vercel.app/answers) reads both mainnet registries.
 
 ### The flywheel back to the dataset
 

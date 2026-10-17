@@ -382,23 +382,132 @@ contract AskSwarmRegistryTest is Test {
         assertEq(reg.latestFor(bytes32(uint256(0xef01))), id2, "11 of 20 is");
     }
 
-    /// Whatever the panel shape, an indexed answer is verified, unexpired and a strict majority of its panel.
-    function testFuzz_indexedAnswersAreMajorities(uint16 panel, uint16 quorum, uint16 agreed, uint32 ttl, uint32 late)
-        public
-    {
+    /// Whatever the panel shape, an indexed answer is verified, in its window (not expired, not issued
+    /// more than the tolerance ahead of the clock) and a strict majority of its panel.
+    function testFuzz_indexedAnswersAreMajorities(
+        uint16 panel,
+        uint16 quorum,
+        uint16 agreed,
+        uint32 ttl,
+        uint32 late,
+        uint32 ahead
+    ) public {
         panel = uint16(bound(panel, 2, 100));
         quorum = uint16(bound(quorum, 1, panel));
         agreed = uint16(bound(agreed, 0, panel));
+        uint64 issuedAt = uint64(block.timestamp + bound(ahead, 0, 10 minutes));
         uint64 expiresAt = uint64(block.timestamp + bound(ttl, 0, 30 days));
         bytes32 id = _ask();
         OracleAttestation memory a = _mintP(id, 0xf00d, hex"01", 0, panel, quorum, agreed, expiresAt);
+        a.issuedAt = issuedAt;
         bytes memory sig = _sign(reg, a);
         vm.warp(block.timestamp + bound(late, 0, 31 days));
         _deliver(id, a, sig);
         (, AskSwarmRegistry.Answer memory ans) = reg.get(id);
-        assertEq(ans.verified, agreed >= quorum && block.timestamp <= expiresAt);
+        bool inWindow = block.timestamp <= expiresAt && issuedAt <= block.timestamp + 5 minutes;
+        assertEq(ans.verified, agreed >= quorum && inWindow);
         bool isIndexed = reg.latestFor(bytes32(uint256(0xf00d))) == id;
         assertEq(isIndexed, ans.verified && uint256(agreed) * 2 > panel);
+    }
+
+    /// Audit finding 1b549341 through the mock etched at the real Intake address: a second open ask
+    /// cannot carry a re-delivery of a settled id, and the settled record is untouched.
+    function test_settledAskRefusesRedeliveryThroughAnotherOpenAsk() public {
+        bytes32 first = _ask();
+        OracleAttestation memory a = _mint(first, 0x4242, "CHF", 2, 11);
+        _deliver(first, a, _sign(reg, a));
+        (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory ans) = reg.get(first);
+        bytes32 before = keccak256(abi.encode(k, ans));
+
+        bytes32 second = _ask();
+        OracleAttestation memory b = _mint(first, 0x4242, "EUR", 2, 11);
+        bytes memory sig = _sign(reg, b);
+        vm.recordLogs();
+        vm.prank(IIntake(INTAKE).writer());
+        IIntake(INTAKE).complete(second, 0, bytes32(0), "", abi.encode(first, b, sig));
+        assertFalse(_delivered(), "re-delivery of a settled id must be refused");
+        (k, ans) = reg.get(first);
+        assertEq(keccak256(abi.encode(k, ans)), before, "settled record changed");
+        assertEq(ans.answer, bytes("CHF"));
+        assertEq(reg.latestFor(bytes32(uint256(0x4242))), first);
+
+        vm.prank(INTAKE);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, first));
+        reg.onOracleResult(first, b, sig);
+        vm.prank(INTAKE);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, first));
+        reg.onFailure(first, 2, bytes32("disagreed"), 0, 0, "");
+    }
+
+    /// Review finding 8f2c2abc through the mock etched at the real Intake address, whose `requests`
+    /// getter has the live ABI's shape: an ask Intake completed without delivering can be marked Lost.
+    function test_markLostReadsIntakeCompletionRecord() public {
+        bytes32 first = _ask();
+        OracleAttestation memory a = _mint(first, 0x4343, "CHF", 2, 11);
+        _deliver(first, a, _sign(reg, a));
+        bytes32 second = _ask();
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.StillOpen.selector, second));
+        reg.markLost(second);
+
+        OracleAttestation memory b = _mint(first, 0x4343, "EUR", 2, 11);
+        bytes memory sig = _sign(reg, b);
+        vm.recordLogs();
+        vm.prank(IIntake(INTAKE).writer());
+        IIntake(INTAKE).complete(second, 0, bytes32(0), "", abi.encode(first, b, sig));
+        assertFalse(_delivered());
+        (,,, bool completed) = IIntake(INTAKE).requests(second);
+        assertTrue(completed);
+
+        reg.markLost(second);
+        (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory ans) = reg.get(second);
+        assertEq(uint8(k.status), uint8(AskSwarmRegistry.Status.Lost));
+        assertEq(ans.answerHash, bytes32(0));
+        assertEq(reg.latestFor(bytes32(uint256(0x4343))), first);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.AlreadySettled.selector, second));
+        reg.markLost(second);
+    }
+
+    /// Review finding a97feadf through the mock at the real address: the index keeps the answer
+    /// valid longest among equals, and `reindex` recovers a valid answer once the held one expires.
+    function test_indexRespectsValidityWindowAndReindexRecovers() public {
+        bytes32 q = bytes32(uint256(0x7a97));
+        bytes32 strong = _ask();
+        OracleAttestation memory s = _mintP(strong, 0x7a97, hex"00", 0, 15, 11, 11, uint64(block.timestamp + 30 days));
+        _deliver(strong, s, _sign(reg, s));
+        bytes32 brief = _ask();
+        OracleAttestation memory b = _mintP(brief, 0x7a97, hex"00", 0, 15, 11, 11, uint64(block.timestamp + 60));
+        _deliver(brief, b, _sign(reg, b));
+        assertEq(reg.latestFor(q), strong, "60 s answer must not evict a 30-day one");
+
+        bytes32 bigger = _ask();
+        OracleAttestation memory g = _mintP(bigger, 0x7a97, hex"01", 0, 20, 14, 16, uint64(block.timestamp + 1 days));
+        _deliver(bigger, g, _sign(reg, g));
+        assertEq(reg.latestFor(q), strong, "stronger but shorter-lived does not displace");
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.NotEligible.selector, bigger));
+        reg.reindex(bigger);
+
+        vm.warp(block.timestamp + 30 days + 1);
+        assertFalse(reg.isCurrent(q));
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.NotEligible.selector, bigger));
+        reg.reindex(bigger); // expired by now too
+        bytes32 late = _ask();
+        OracleAttestation memory l = _mintP(late, 0x7a97, hex"01", 0, 2, 2, 2, uint64(block.timestamp + 1 days));
+        _deliver(late, l, _sign(reg, l));
+        assertEq(reg.latestFor(q), late, "after expiry the next eligible delivery takes the index");
+    }
+
+    /// Review finding 7b194c37 against the mock at the real address: the ceiling is enforced.
+    function test_askAtMostAgainstTheQuotedPrice() public {
+        uint256 p = reg.price();
+        vm.startPrank(user);
+        IERC20Like(IMD).approve(address(reg), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.PriceAboveMax.selector, p, p - 1));
+        reg.askAtMost(BODY, p - 1);
+        bytes32 id = reg.askAtMost(BODY, p);
+        vm.stopPrank();
+        (AskSwarmRegistry.Ask memory k,) = reg.get(id);
+        assertEq(k.asker, user);
+        assertEq(IERC20Like(IMD).balanceOf(user), 10 ether - p);
     }
 
     /// Launch rule: the constructor calls no other contract, so it deploys on an empty chain, and

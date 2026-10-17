@@ -174,6 +174,12 @@ contract RecordingIntake {
         return _requests[id];
     }
 
+    /// The live Intake's public getter, as its verified ABI declares it (four words).
+    function requests(bytes32 id) external view returns (address, address, bytes4, bool) {
+        Request storage r = _requests[id];
+        return (r.payer, r.callback.target, r.callback.selector, r.completed);
+    }
+
     function complete(bytes32 id, uint8 status, bytes calldata args) external returns (bool delivered) {
         if (msg.sender != writer) revert NotWriter();
         Request storage r = _requests[id];
