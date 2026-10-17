@@ -1,6 +1,6 @@
 import { bot } from "../lib/bot";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Plain handler instead of grammy's std/http adapter: the adapter hung on Vercel's Request while
 // passing locally, and these six lines are easier to reason about than its promise plumbing.

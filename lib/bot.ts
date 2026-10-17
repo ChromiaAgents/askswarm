@@ -2,7 +2,8 @@
 // once asked, the tx hash; Chromia Pay metadata carries chat/message ids. Runs as Vercel functions.
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { privateKeyToAccount } from "viem/accounts";
-import { decodeAbiParameters, type Hex } from "viem";
+import { decodeAbiParameters, hexToString, type Hex } from "viem";
+import { waitUntil } from "@vercel/functions";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
@@ -116,6 +117,7 @@ export async function markAsked(chatId: number | string, msgId: number, question
   await bot.api.editMessageText(chatId, msgId,
     `❓ ${esc(question)}\n⏳ Asked the swarm on ${chainName(chainId)}${who}. Panel of ${panelSize} is assessing, usually 1–3 min.\ntx ${chainName(chainId)} ${tx}\n<a href="${txUrl(chainId, tx)}">etherscan</a>`,
     { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: new InlineKeyboard().text("Check status", "chk") });
+  watch(chatId, msgId, question, chainId, tx);
 }
 
 export async function askAndMark(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId) {
@@ -143,41 +145,59 @@ function decodeAnswer(m: Record<string, any>): string {
       case "bool": return BigInt(m.figure) === 1n ? "Yes" : "No";
       case "uint256": return String(m.figure);
       case "address": return decodeAbiParameters([{ type: "address" }], m.answer)[0] as string;
-      case "bytes32": return String(m.answer);
+      case "bytes32": {
+        const t = hexToString(m.answer as Hex).replace(/\0+$/, "");
+        return t && /^[\x20-\x7e]+$/.test(t) ? t : String(m.answer);
+      }
       default: return String(m.answer);
     }
   } catch { return String(m.answer); }
+}
+
+/** Reads plane + oracle state for a card and edits it when terminal. Returns a short status note. */
+export async function refresh(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId, tx: Hex): Promise<{ done: boolean; note: string }> {
+  const rec = await intake.readIntake(chainId, tx);
+  const requestId = intake.oracleRequestIdFrom(rec);
+  if (!requestId) return { done: false, note: `plane: ${rec?.entries?.[0]?.state ?? "indexing, ~1 min"}` };
+  const s = await imd.oracleStatus(requestId);
+  if (!["attested", "disagreed", "blocked", "mismatch", "refused", "failed"].includes(s.status)) {
+    return { done: false, note: `panel ${s.status}, agreed ${s.agreement?.agreed ?? 0}` };
+  }
+  const edit = (html: string) => bot.api.editMessageText(chatId, msgId, html, { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  const jobLink = s.jobUrl ? `\n<a href="${esc(s.jobUrl)}">swarm job</a>` : "";
+  if (s.status !== "attested") {
+    await edit(`❓ ${esc(question)}\n⚠️ Panel ended <b>${esc(s.status)}</b>, no consensus. ${esc(JSON.stringify(s.failure ?? "")).slice(0, 200)}\ntx ${chainName(chainId)} ${tx}${jobLink}`);
+    return { done: true, note: s.status };
+  }
+  const att = await imd.attestation(requestId);
+  if (!att) return { done: false, note: "attested, signature not published yet" };
+  const valid = await imd.verifyAttestation(att);
+  const m = att.message;
+  await edit(
+    `❓ ${esc(question)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>\ntx ${chainName(chainId)} ${tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(chainId, tx)}">etherscan</a>`);
+  return { done: true, note: "answered" };
+}
+
+// Keeps the function alive after the HTTP response (Vercel waitUntil) and polls until the panel is
+// terminal or the budget runs out. The Check status button stays as the manual fallback.
+// ponytail: no queue, no cron; if the instance dies the user taps Check status.
+export function watch(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId, tx: Hex, budgetMs = 270_000) {
+  const t0 = Date.now();
+  waitUntil((async () => {
+    while (Date.now() - t0 < budgetMs) {
+      await new Promise((r) => setTimeout(r, 10_000));
+      try { if ((await refresh(chatId, msgId, question, chainId, tx)).done) return; }
+      catch (e: any) { console.error("[watch]", e?.message ?? e); }
+    }
+  })());
 }
 
 bot.callbackQuery("chk", async (ctx) => {
   const msg = ctx.callbackQuery.message;
   const st = msg && parseTx(msg.text);
   if (!st) return ctx.answerCallbackQuery("no tx on this message");
-  try {
-    const rec = await intake.readIntake(st.chainId, st.tx);
-    const requestId = intake.oracleRequestIdFrom(rec);
-    if (!requestId) return ctx.answerCallbackQuery(`plane state: ${rec?.entries?.[0]?.state ?? "not indexed yet"}`);
-    const s = await imd.oracleStatus(requestId);
-    if (["assessing", "reproducing", "pending", "queued"].includes(s.status) || !["attested", "disagreed", "blocked", "mismatch", "refused", "failed"].includes(s.status)) {
-      return ctx.answerCallbackQuery(`panel ${s.status}, agreed ${s.agreement?.agreed ?? 0}`);
-    }
-    const q = parseQuestion(msg.text);
-    const jobLink = s.jobUrl ? `\n<a href="${esc(s.jobUrl)}">swarm job</a>` : "";
-    if (s.status !== "attested") {
-      await ctx.editMessageText(`❓ ${esc(q)}\n⚠️ Panel ended <b>${esc(s.status)}</b>, no consensus. ${esc(JSON.stringify(s.failure ?? "")).slice(0, 200)}\ntx ${chainName(st.chainId)} ${st.tx}${jobLink}`, { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
-      return ctx.answerCallbackQuery();
-    }
-    const att = await imd.attestation(requestId);
-    if (!att) return ctx.answerCallbackQuery("attested, signature not published yet");
-    const valid = await imd.verifyAttestation(att);
-    const m = att.message;
-    await ctx.editMessageText(
-      `❓ ${esc(q)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>\ntx ${chainName(st.chainId)} ${st.tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(st.chainId, st.tx)}">etherscan</a>`,
-      { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
-    await ctx.answerCallbackQuery("answered");
-  } catch (e: any) {
-    await ctx.answerCallbackQuery(`error: ${String(e.message).slice(0, 150)}`);
-  }
+  try { await ctx.answerCallbackQuery((await refresh(msg.chat.id, msg.message_id, parseQuestion(msg.text), st.chainId, st.tx)).note); }
+  catch (e: any) { await ctx.answerCallbackQuery(`error: ${String(e.message).slice(0, 150)}`); }
 });
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));

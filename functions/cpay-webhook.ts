@@ -25,4 +25,4 @@ export async function POST(req: Request): Promise<Response> {
   return new Response("ok", { status: 200 });
 }
 
-export const maxDuration = 60;
+export const maxDuration = 300;

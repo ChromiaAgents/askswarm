@@ -8,7 +8,7 @@ import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { verifySig, markAsked } from "../lib/bot";
 
-export const maxDuration = 30;
+export const maxDuration = 300;
 const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
 
