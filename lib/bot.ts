@@ -14,6 +14,10 @@ export const ASK_CHAIN = Number(process.env.ASK_CHAIN_ID ?? 11155111) as intake.
 const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
 const PRICE_CHR = process.env.CPAY_PRICE_CHR ?? "2.00";
 const MAX_Q = 500;
+// Telegram user or chat ids that may ask without paying (house wallet pays IMD). For internal testing
+// on mainnet; empty in production. Find ids with /id.
+const FREE_IDS = new Set((process.env.ASK_FREE_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+const canAskFree = (ctx: Context) => intake.CHAINS[ASK_CHAIN].free || FREE_IDS.has(String(ctx.from?.id)) || FREE_IDS.has(String(ctx.chat?.id));
 
 // CHR spot price for the Pay button label. ponytail: CoinGecko free tier, 60s cache per instance, label
 // falls back to CHR only when the lookup fails. Display only, never used for the charge.
@@ -67,7 +71,7 @@ bot.command("ask", async (ctx) => {
     (why.length && lvl !== "low" ? `\n<i>${why.map(esc).join("; ")}</i>` : "");
   const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\n${riskLine}\nYou buy the panel, not the answer: a split panel is not refunded.`;
   const kb = new InlineKeyboard();
-  if (intake.CHAINS[ASK_CHAIN].free) kb.text("Ask free (Sepolia)", "free");
+  if (canAskFree(ctx)) kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : "Ask free (house pays)", "free");
   const status = await ctx.reply(text, { parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
 
   const pay = cpay();
@@ -107,7 +111,7 @@ export async function askAndMark(chatId: number | string, msgId: number, questio
 
 bot.callbackQuery("free", async (ctx) => {
   const msg = ctx.callbackQuery.message;
-  if (!msg || !intake.CHAINS[ASK_CHAIN].free) return ctx.answerCallbackQuery("not available");
+  if (!msg || !canAskFree(ctx)) return ctx.answerCallbackQuery("not available");
   if (parseTx(msg.text)) return ctx.answerCallbackQuery("already asked");
   await ctx.answerCallbackQuery("asking…");
   try { await askAndMark(msg.chat.id, msg.message_id, parseQuestion(msg.text), ASK_CHAIN); }
@@ -158,5 +162,6 @@ bot.callbackQuery("chk", async (ctx) => {
   }
 });
 
+bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
 bot.command("start", (ctx) => ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?"));
 bot.catch((e) => console.error("bot error", e.error));
