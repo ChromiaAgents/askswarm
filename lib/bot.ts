@@ -82,9 +82,33 @@ const parseTx = (text = "") => {
 };
 
 // ---- /ask ---------------------------------------------------------------------------------------
-bot.command("ask", async (ctx) => {
-  const raw = (ctx.match ?? "").toString().replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim();
-  if (!raw) return ctx.reply("Usage: /ask <a factual question>");
+bot.command("ask", (ctx) => ask(ctx, (ctx.match ?? "").toString(), ctx.msg.message_id));
+
+// Curated demo questions. Order matters for a live demo: free recall hit, then a fresh paid one,
+// then a bool, then one the swarm refuses, then one the risk model flags.
+export const EXAMPLES = [
+  "What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only.",
+  "What is AT&T's NYSE ticker symbol? Answer with the ticker symbol only.",
+  "In what year did the Black Monday crash occur, when the Dow fell about 22.6% in a single day? Answer with the four-digit year only.",
+  "Did Argentina win the 2022 FIFA World Cup?",
+  "On Ethereum mainnet, how much gas was used in total by block 26210851 (the block's gasUsed field)? Answer with the whole number only.",
+  "What is the population of Springfield?",
+];
+bot.command("examples", (ctx) => {
+  const kb = new InlineKeyboard();
+  EXAMPLES.forEach((q, i) => kb.text(q.length > 60 ? q.slice(0, 57) + "…" : q, `ex:${i}`).row());
+  return ctx.reply("Tap one to ask it:", { reply_markup: kb });
+});
+bot.callbackQuery(/^ex:(\d+)$/, async (ctx) => {
+  const q = EXAMPLES[Number(ctx.match[1])];
+  if (!q) return ctx.answerCallbackQuery("gone");
+  await ctx.answerCallbackQuery();
+  await ask(ctx, q);
+});
+
+async function ask(ctx: Context, input: string, replyTo?: number) {
+  const raw = input.replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim();
+  if (!raw) return ctx.reply("Usage: /ask <a factual question>\nOr /examples to pick one.");
   if (raw.length > MAX_Q) return ctx.reply(`Too long, max ${MAX_Q} chars.`);
 
   const chk = await imd.check(raw, PANEL);
@@ -112,17 +136,17 @@ bot.command("ask", async (ctx) => {
     const p = await spot("imd");
     kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : `Ask free (house pays${p ? ` ~${usd(0.5 * p)}` : ""})`, "free");
   }
-  const status = await ctx.reply(text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
+  const status = await ctx.reply(text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: replyTo ? { message_id: replyTo } : undefined, reply_markup: kb });
   const pay = cpay();
   if (pay) {
-    const askId = `${ctx.chat.id}:${status.message_id}`;
+    const askId = `${ctx.chat!.id}:${status.message_id}`;
     const payment = await pay.payments.create({
       amount: PRICE_CHR,
       description: r.question.slice(0, 120),
       successUrl: `https://t.me/${ctx.me.username}`,
       expiresIn: 900,
       idempotencyKey: askId,
-      metadata: { askId, chatId: ctx.chat.id, statusMsgId: status.message_id, threadId: ctx.msg.message_thread_id ?? null, question: r.question },
+      metadata: { askId, chatId: ctx.chat!.id, statusMsgId: status.message_id, threadId: ctx.msg?.message_thread_id ?? null, question: r.question },
     });
     // Mini App keeps the payer inside Telegram. web_app inline buttons are private-chat only, so groups
     // get the direct-link Mini App (BotFather /newapp, short name "pay") with the checkout's cs_ id as
@@ -130,16 +154,16 @@ bot.command("ask", async (ctx) => {
     kb.row();
     const csId = payment.checkout_url.split("/").pop()!;
     const label = await priceLabel();
-    if (ctx.chat.type === "private") kb.webApp(label, payment.checkout_url);
+    if (ctx.chat!.type === "private") kb.webApp(label, payment.checkout_url);
     else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
   }
   // Pay in IMD from the user's own wallet: attestation is then addressed to them, not the house.
   if (ASK_CHAIN === 1) {
     const p = await spot("imd");
-    kb.row().url(`Pay 0.5 IMD${p ? ` (~${usd(0.5 * p)})` : ""} from your wallet`, imdPayUrl(ctx.chat.id, status.message_id, r.question));
+    kb.row().url(`Pay 0.5 IMD${p ? ` (~${usd(0.5 * p)})` : ""} from your wallet`, imdPayUrl(ctx.chat!.id, status.message_id, r.question));
   }
-  if (pay || ASK_CHAIN === 1) await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
-});
+  if (pay || ASK_CHAIN === 1) await ctx.api.editMessageReplyMarkup(ctx.chat!.id, status.message_id, { reply_markup: kb });
+}
 
 // ---- ask the swarm (shared by free button and paid webhook) --------------------------------------
 export async function markAsked(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId, tx: Hex, panelSize: number, who = "") {
@@ -230,5 +254,5 @@ bot.callbackQuery("chk", async (ctx) => {
 });
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
-bot.command("start", (ctx) => ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?"));
+bot.command("start", (ctx) => ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?\n\nOr /examples to pick one."));
 bot.catch((e) => console.error("bot error", e.error));
