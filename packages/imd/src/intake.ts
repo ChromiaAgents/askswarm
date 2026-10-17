@@ -67,12 +67,18 @@ export async function ensureAllowance(chainId: IntakeChainId, account: PrivateKe
 export const requestArgs = (chainId: IntakeChainId, body: OracleRequestBody) =>
   [ACTION_ID, stringToHex(JSON.stringify(body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, CHAINS[chainId].imd, PRICE] as const;
 
+/** Body for a registry ask: names the registry as the EIP-712 consumer explicitly. The docs say the
+ *  callback contract is the domain anyway; every live attestation we sampled carried `consumer`, so
+ *  we send it too. The contract's domain is address(this), so both roads lead to the same digest. */
+export const registryBody = (chainId: IntakeChainId, body: OracleRequestBody) =>
+  REGISTRY ? { ...body, consumer: { chainId, verifyingContract: REGISTRY.toLowerCase() } } : body;
+
 /** Pays 0.5 IMD and asks. Returns tx hash; the plane indexes it at GET /intake/:chainId/:tx.
  *  Through the registry when REGISTRY_ADDRESS is set (same Requested event, callback = registry). */
 export async function ask(chainId: IntakeChainId, account: PrivateKeyAccount, body: OracleRequestBody): Promise<Hex> {
   const { wallet } = clients(chainId, account);
   if (REGISTRY) {
-    return wallet.writeContract({ address: REGISTRY, abi: registryAbi, functionName: "ask", args: [stringToHex(JSON.stringify(body))] });
+    return wallet.writeContract({ address: REGISTRY, abi: registryAbi, functionName: "ask", args: [stringToHex(JSON.stringify(registryBody(chainId, body)))] });
   }
   // ponytail: no nonce manager; one hot wallet, low volume. Add viem nonceManager if webhooks ever overlap.
   return wallet.writeContract({

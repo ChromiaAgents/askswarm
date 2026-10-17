@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   if (!a) return json({ error: "bad_signature" }, 403);
   const chk = await imd.check(a.q, PANEL);
   if (!chk.request || chk.blockers?.length) return json({ error: "blocked", blockers: chk.blockers }, 409);
-  const [action, body, callback, asset, amount] = intake.requestArgs(1, chk.request);
+  const [action, body, callback, asset, amount] = intake.requestArgs(1, intake.registryBody(1, chk.request));
   // With a registry the wallet calls registry.ask(body) and approves the registry; without, Intake directly.
   return json({ request: chk.request, intake: intake.INTAKE, registry: intake.REGISTRY, asset, amount: amount.toString(), args: { action, body, callback } });
 }
