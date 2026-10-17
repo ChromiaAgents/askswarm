@@ -175,7 +175,7 @@ docs/brand/                 infographic source (HTML + Chromia brand fonts), ren
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
 packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
-scripts/                    spike-sepolia.ts (gate), spike.ts, dry-run.ts, approve-permit2.ts, train-risk.ts, build-answers.ts
+scripts/                    spike-sepolia.ts (gate), spike.ts, dry-run.ts, approve-permit2.ts, train-risk.ts, build-answers.ts, launch.ts (hire the swarm to deploy the registry)
 ```
 
 ### Pay with IMD from your own wallet
@@ -198,6 +198,16 @@ Two free tiers sit above the paid swarm on every card:
    `ANTHROPIC_API_KEY` is set. Labelled unsigned on the card; replies "unsure" rather than guess.
 
 The paid swarm is the escalation: when the answer has to be signed, fresh, or settle something.
+
+### Onchain memory: AskSwarmRegistry
+
+Paid answers do not stop in the chat. With `REGISTRY_ADDRESS` set, every paid ask goes through
+[AskSwarmRegistry](https://github.com/ChromiaAgents/askswarm-registry): the contract pays Intake v2
+with itself as callback, verifies the swarm's EIP-712 attestation onchain, and stores the answer by
+question hash. Any contract or client can then read what the swarm attested, free, with the proof.
+The registry is launched through the IMD protocol itself (an `evm_contracts` launch: swarm audit,
+adaptation, tests, specialist audits, deploy). Sepolia test deployment
+`0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900`.
 
 ## Pricing
 

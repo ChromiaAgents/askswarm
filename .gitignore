@@ -4,7 +4,3 @@ node_modules
 .env*
 dist/
 
-contracts/lib/
-contracts/out/
-contracts/cache/
-contracts/broadcast/

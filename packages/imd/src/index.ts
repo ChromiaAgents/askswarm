@@ -76,6 +76,12 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 const json = { "Content-Type": "application/json" };
 
 /** Free. No token. Returns the drafted request the panel would see. */
+/** Free precheck for any paid action body (launch.open, job.open...). */
+export async function checkAction(action: string, input: Record<string, unknown>): Promise<any> {
+  const res = await fetch(`${IMD_API}/requests/check`, { method: "POST", headers: json, body: JSON.stringify({ action, input }) });
+  return j<any>(res);
+}
+
 export async function check(question: string, panelSize: number): Promise<CheckResult> {
   // server rejects `quorum` here and derives it (15 -> 11). Limits seen live: panelSize 5..100.
   const res = await fetch(`${IMD_API}/requests/check`, {
@@ -85,10 +91,10 @@ export async function check(question: string, panelSize: number): Promise<CheckR
   return j<CheckResult>(res);
 }
 
-export async function quote(token: string, requestKey: string, input: OracleRequestBody): Promise<Order> {
+export async function quote(token: string, requestKey: string, input: OracleRequestBody | Record<string, unknown>, action = "oracle.request"): Promise<Order> {
   const res = await fetch(`${IMD_API}/requests/quote`, {
     method: "POST", headers: { ...auth(token), ...json },
-    body: JSON.stringify({ requestKey, action: "oracle.request", input }),
+    body: JSON.stringify({ requestKey, action, input }),
   });
   const body = await j<{ created: boolean; order: Order }>(res);
   return body.order;
