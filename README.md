@@ -223,6 +223,14 @@ accepted versions.
 | Ethereum mainnet (swarm-deployed, verified) | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
 | Sepolia (self-deployed, pre-audit build) | `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900` |
 
+### The flywheel back to the dataset
+
+The split-risk model reads `evalengine/imd-oracle-outcomes`; the registry writes back to it. A daily
+cron (`api/hf-sync`, or `bun scripts/hf-sync.ts`) pushes every terminal registry answer to
+`contrib/askswarm/answers.jsonl` in that dataset: question, body, decoded answer, panel, agreement,
+onchain verification, txs, with `label` in the dataset's own 0 attested / 1 disagreed convention.
+Needs `HF_TOKEN` with write access; without it the job is a no-op.
+
 ## Pricing
 
 IMD sets the floor. One `oracle.request` is a flat 0.5 IMD whatever the panel size, and IMD trades
