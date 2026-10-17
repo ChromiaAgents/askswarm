@@ -175,6 +175,14 @@ packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
 scripts/                    spike-sepolia.ts (free gate), spike.ts (mainnet), dry-run.ts, approve-permit2.ts, train-risk.ts
 ```
 
+## Pricing
+
+IMD sets the floor. One `oracle.request` is a flat 0.5 IMD whatever the panel size, and IMD trades
+around $5.78 (Uniswap, 17 Oct 2026), so the house pays about $2.89 plus gas per question. The bot
+charges 160 CHR (~$3.16 at $0.0198) through Chromia Pay, which covers that with a thin margin. Change
+`CPAY_PRICE_CHR` and rerun `scripts/vercel-env.sh` if either price moves. The Pay button shows the
+live USD equivalent from CoinGecko, display only; the charge is always the CHR amount.
+
 ## Security
 
 - Telegram webhook checks `X-Telegram-Bot-Api-Secret-Token`. Chromia Pay webhook verifies the HMAC on the raw body, fulfils only `confirmed` / `overpaid`.
