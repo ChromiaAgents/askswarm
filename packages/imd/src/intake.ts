@@ -121,3 +121,13 @@ export async function registryAnswer(chainId: IntakeChainId, questionHash: Hex) 
   const [requestId, a] = await pub.readContract({ address: REGISTRY, abi: registryAbi, functionName: "answerOf", args: [questionHash] });
   return a.verified ? { requestId, ...a } : null;
 }
+
+/** Onchain memory by Intake request id: what the registry recorded for this exact ask, or null. */
+export async function registryRecord(chainId: IntakeChainId, intakeRequestId: Hex) {
+  if (!REGISTRY) return null;
+  const c = CHAINS[chainId];
+  const pub = createPublicClient({ chain: c.chain, transport: http(process.env[c.rpcEnv]) });
+  const [k, a] = await pub.readContract({ address: REGISTRY, abi: registryAbi, functionName: "get", args: [intakeRequestId] });
+  const status = (["none", "pending", "answered", "refused", "no result", "unverified"] as const)[k.status] ?? "?";
+  return { status, verified: a.verified, agreed: a.agreed, panelSize: a.panelSize };
+}

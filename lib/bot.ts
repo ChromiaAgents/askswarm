@@ -226,9 +226,16 @@ export async function refresh(chatId: number | string, msgId: number, question: 
   if (!att) return { done: false, note: "attested, signature not published yet" };
   const valid = await imd.verifyAttestation(att);
   const m = att.message;
+  // What the registry contract itself recorded for this ask (the callback lands seconds after the
+  // attestation is published, so this can still read pending on the first refresh).
+  const intakeId = rec?.entries?.[0]?.requestId as Hex | undefined;
+  const onchain = intakeId ? await intake.registryRecord(chainId, intakeId).catch(() => null) : null;
+  const chainLine = onchain
+    ? `\n<i>onchain: ${onchain.status === "answered" && onchain.verified ? "verified and stored in AskSwarmRegistry ✅" : `registry ${esc(onchain.status)}`}</i>`
+    : "";
   await edit(
-    `❓ ${esc(question)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>\ntx ${chainName(chainId)} ${tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(chainId, tx)}">etherscan</a>`);
-  return { done: true, note: "answered" };
+    `❓ ${esc(question)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>${chainLine}\ntx ${chainName(chainId)} ${tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(chainId, tx)}">etherscan</a>${intake.REGISTRY ? ` · <a href="https://etherscan.io/address/${intake.REGISTRY}">registry</a>` : ""}`);
+  return { done: true, note: onchain && onchain.status === "pending" ? "answered, registry callback landing" : "answered" };
 }
 
 // Keeps the function alive after the HTTP response (Vercel waitUntil) and polls until the panel is
@@ -239,7 +246,10 @@ export function watch(chatId: number | string, msgId: number, question: string, 
   waitUntil((async () => {
     while (Date.now() - t0 < budgetMs) {
       await new Promise((r) => setTimeout(r, 10_000));
-      try { if ((await refresh(chatId, msgId, question, chainId, tx)).done) return; }
+      try {
+        const r = await refresh(chatId, msgId, question, chainId, tx);
+        if (r.done && !r.note.includes("landing")) return;
+      }
       catch (e: any) { console.error("[watch]", e?.message ?? e); }
     }
   })());
