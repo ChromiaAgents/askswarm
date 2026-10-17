@@ -1,0 +1,15 @@
+# Foundry at the repo root so IMD's contract import (and anyone's `forge test`) works from here;
+# the Solidity lives under contracts/.
+[profile.default]
+src = "contracts/src"
+test = "contracts/test"
+script = "contracts/script"
+libs = ["contracts/lib"]
+out = "contracts/out"
+cache_path = "contracts/cache"
+broadcast = "contracts/broadcast"
+optimizer = true
+optimizer_runs = 2000
+solc_version = "0.8.26"
+via_ir = true
+bytecode_hash = "none"

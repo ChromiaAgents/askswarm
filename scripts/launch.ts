@@ -12,10 +12,9 @@ const PAY = process.argv.includes("--pay");
 const token = process.env.IMD_PAID_TOKEN!;
 const signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);
 const OWNER = (process.env.PRIZE_WALLET ?? signer.address).toLowerCase();
-const REG_DIR = process.env.REGISTRY_DIR ?? "../askswarm-registry";
-const repoUrl = "https://github.com/ChromiaAgents/askswarm-registry";
-const baseCommit = execSync(`git -C ${REG_DIR} rev-parse HEAD`).toString().trim();
-const objective = readFileSync(`${REG_DIR}/LAUNCH.md`, "utf8").trim();
+const repoUrl = "https://github.com/ChromiaAgents/askswarm";
+const baseCommit = execSync("git rev-parse HEAD").toString().trim();
+const objective = readFileSync("contracts/LAUNCH.md", "utf8").trim();
 
 const input = {
   objective,
@@ -25,7 +24,7 @@ const input = {
   chainId: Number(process.env.LAUNCH_CHAIN_ID ?? 1),
   owner: OWNER,
   github: true,
-  contracts: ["src/AskSwarmRegistry.sol"],
+  contracts: ["contracts/src/AskSwarmRegistry.sol"],
   // From-your-repo launches start with an audit of the import, then adaptation; the planner adds its
   // own audit panel at the end (explorer.imd.fun/launch "Contracts" tab does the same).
   shape: "chain",
