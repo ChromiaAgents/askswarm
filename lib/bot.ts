@@ -21,18 +21,32 @@ const MAX_Q = 500;
 const FREE_IDS = new Set((process.env.ASK_FREE_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 const canAskFree = (ctx: Context) => intake.CHAINS[ASK_CHAIN].free || FREE_IDS.has(String(ctx.from?.id)) || FREE_IDS.has(String(ctx.chat?.id));
 
-// CHR spot price for the Pay button label. ponytail: CoinGecko free tier, 60s cache per instance, label
-// falls back to CHR only when the lookup fails. Display only, never used for the charge.
-let chrUsd: { v: number; at: number } | null = null;
-async function priceLabel(): Promise<string> {
+// Spot prices for labels only, never for the charge. ponytail: 60s cache per instance, blank on failure.
+// CHR from CoinGecko; IMD from DexScreener (CoinGecko has no entry for it).
+const IMD_TOKEN = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
+const priceCache: Record<string, { v: number; at: number }> = {};
+async function spot(key: "chr" | "imd"): Promise<number | null> {
+  const c = priceCache[key];
+  if (c && Date.now() - c.at < 60_000) return c.v;
   try {
-    if (!chrUsd || Date.now() - chrUsd.at > 60_000) {
-      const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=chromaway&vs_currencies=usd", { signal: AbortSignal.timeout(2500) });
-      chrUsd = { v: Number((await r.json()).chromaway.usd), at: Date.now() };
-    }
-    const usd = Number(PRICE_CHR) * chrUsd.v;
-    return `Pay ${PRICE_CHR} CHR (~$${usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2)})`;
-  } catch { return `Pay ${PRICE_CHR} CHR`; }
+    const opt = { signal: AbortSignal.timeout(2500) };
+    const v = key === "chr"
+      ? Number((await (await fetch("https://api.coingecko.com/api/v3/simple/price?ids=chromaway&vs_currencies=usd", opt)).json()).chromaway.usd)
+      : Number((await (await fetch(`https://api.dexscreener.com/latest/dex/tokens/${IMD_TOKEN}`, opt)).json()).pairs?.[0]?.priceUsd);
+    if (!Number.isFinite(v) || v <= 0) return null;
+    priceCache[key] = { v, at: Date.now() };
+    return v;
+  } catch { return null; }
+}
+const usd = (n: number) => `$${n < 0.1 ? n.toFixed(3) : n.toFixed(2)}`;
+async function priceLabel(): Promise<string> {
+  const p = await spot("chr");
+  return p ? `Pay ${PRICE_CHR} CHR (~${usd(Number(PRICE_CHR) * p)})` : `Pay ${PRICE_CHR} CHR`;
+}
+/** "0.5 IMD (~$2.89, IMD $5.78)" or "0.5 IMD" when the price lookup fails. */
+async function imdCostLine(): Promise<string> {
+  const p = await spot("imd");
+  return p ? `0.5 IMD (~${usd(0.5 * p)}, IMD ${usd(p)})` : "0.5 IMD";
 }
 
 // Pay-with-IMD link: the page gets chat/message ids and the question in the URL, signed so only the bot
@@ -83,9 +97,13 @@ bot.command("ask", async (ctx) => {
   const p = risk.predict(r), lvl = risk.riskLabel(p), why = risk.hints(r);
   const riskLine = `${lvl === "low" ? "🟢" : lvl === "medium" ? "🟡" : "🔴"} Split risk ${lvl} (${Math.round(p * 100)}%)` +
     (why.length && lvl !== "low" ? `\n<i>${why.map(esc).join("; ")}</i>` : "");
-  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\n${riskLine}\nYou buy the panel, not the answer: a split panel is not refunded.`;
+  const cost = await imdCostLine();
+  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\n${riskLine}\nYou buy the panel, not the answer: it costs ${esc(cost)} and a split panel is not refunded.`;
   const kb = new InlineKeyboard();
-  if (canAskFree(ctx)) kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : "Ask free (house pays)", "free");
+  if (canAskFree(ctx)) {
+    const p = await spot("imd");
+    kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : `Ask free (house pays${p ? ` ~${usd(0.5 * p)}` : ""})`, "free");
+  }
   const status = await ctx.reply(text, { parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
   const pay = cpay();
   if (pay) {
@@ -108,7 +126,10 @@ bot.command("ask", async (ctx) => {
     else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
   }
   // Pay in IMD from the user's own wallet: attestation is then addressed to them, not the house.
-  if (ASK_CHAIN === 1) kb.row().url("Pay 0.5 IMD (your wallet)", imdPayUrl(ctx.chat.id, status.message_id, r.question));
+  if (ASK_CHAIN === 1) {
+    const p = await spot("imd");
+    kb.row().url(`Pay 0.5 IMD${p ? ` (~${usd(0.5 * p)})` : ""} from your wallet`, imdPayUrl(ctx.chat.id, status.message_id, r.question));
+  }
   if (pay || ASK_CHAIN === 1) await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
 });
 
