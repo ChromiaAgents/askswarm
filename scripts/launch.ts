@@ -24,7 +24,7 @@ const input = {
   chainId: Number(process.env.LAUNCH_CHAIN_ID ?? 1),
   owner: OWNER,
   github: true,
-  contracts: ["contracts/src/AskSwarmRegistry.sol"],
+  contracts: ["src/AskSwarmRegistry.sol"],
   // From-your-repo launches start with an audit of the import, then adaptation; the planner adds its
   // own audit panel at the end (explorer.imd.fun/launch "Contracts" tab does the same).
   shape: "chain",

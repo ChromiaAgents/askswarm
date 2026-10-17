@@ -1,10 +1,11 @@
-# Foundry at the repo root so IMD's contract import (and anyone's `forge test`) works from here;
-# the Solidity lives under contracts/.
+# Foundry at the repo root: IMD's contract import looks for src/ here, and anyone can `forge test`.
+# Contracts in src/, fork tests in test/, deploy script in script/, vendored forge-std in contracts/lib/.
 [profile.default]
-src = "contracts/src"
-test = "contracts/test"
-script = "contracts/script"
+src = "src"
+test = "test"
+script = "script"
 libs = ["contracts/lib"]
+remappings = ["forge-std/=contracts/lib/forge-std/src/"]
 out = "contracts/out"
 cache_path = "contracts/cache"
 broadcast = "contracts/broadcast"
