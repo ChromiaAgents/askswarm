@@ -86,24 +86,24 @@ bot.command("ask", (ctx) => ask(ctx, (ctx.match ?? "").toString(), ctx.msg.messa
 
 // Curated demo questions. Order matters for a live demo: free recall hit, then a fresh paid one,
 // then a bool, then one the swarm refuses, then one the risk model flags.
-export const EXAMPLES = [
-  "What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only.",
-  "What is AT&T's NYSE ticker symbol? Answer with the ticker symbol only.",
-  "In what year did the Black Monday crash occur, when the Dow fell about 22.6% in a single day? Answer with the four-digit year only.",
-  "Did Argentina win the 2022 FIFA World Cup?",
-  "On Ethereum mainnet, how much gas was used in total by block 26210851 (the block's gasUsed field)? Answer with the whole number only.",
-  "What is the population of Springfield?",
+export const EXAMPLES: { label: string; q: string }[] = [
+  { label: "Swiss franc ISO code · free, already attested", q: "What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only." },
+  { label: "AT&T ticker · free, already attested", q: "What is AT&T's NYSE ticker symbol? Answer with the ticker symbol only." },
+  { label: "Black Monday year · fresh paid ask", q: "In what year did the Black Monday crash occur, when the Dow fell about 22.6% in a single day? Answer with the four-digit year only." },
+  { label: "Argentina won 2022 World Cup? · yes/no", q: "Did Argentina win the 2022 FIFA World Cup?" },
+  { label: "gasUsed of block 26210851 · onchain lookup", q: "On Ethereum mainnet, how much gas was used in total by block 26210851 (the block's gasUsed field)? Answer with the whole number only." },
+  { label: "Population of Springfield · swarm refuses", q: "What is the population of Springfield?" },
 ];
 bot.command("examples", (ctx) => {
   const kb = new InlineKeyboard();
-  EXAMPLES.forEach((q, i) => kb.text(q.length > 60 ? q.slice(0, 57) + "…" : q, `ex:${i}`).row());
+  EXAMPLES.forEach((e, i) => kb.text(e.label, `ex:${i}`).row());
   return ctx.reply("Tap one to ask it:", { reply_markup: kb });
 });
 bot.callbackQuery(/^ex:(\d+)$/, async (ctx) => {
-  const q = EXAMPLES[Number(ctx.match[1])];
-  if (!q) return ctx.answerCallbackQuery("gone");
+  const e = EXAMPLES[Number(ctx.match[1])];
+  if (!e) return ctx.answerCallbackQuery("gone");
   await ctx.answerCallbackQuery();
-  await ask(ctx, q);
+  await ask(ctx, e.q);
 });
 
 async function ask(ctx: Context, input: string, replyTo?: number) {
