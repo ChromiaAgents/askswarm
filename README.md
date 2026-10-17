@@ -13,33 +13,35 @@ Built by EVAL Engine for the Identity MD hackathon, October 2026.
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as User (Telegram group)
-    participant B as AskSwarm bot<br/>(Vercel function)
+    actor U as User (Telegram)
+    participant B as AskSwarm bot<br/>(Vercel functions)
     participant P as Chromia Pay
-    participant I as IMD Intake<br/>(Ethereum / Sepolia)
+    participant R as AskSwarmRegistry<br/>(Ethereum, launched through IMD)
+    participant I as IMD Intake v2
     participant S as IMD swarm<br/>(api.imd.fun)
 
-    U->>B: /ask Did Argentina win the 2022 World Cup?
+    U->>B: /ask What is the ISO 4217 code of the Swiss franc?
     B->>S: POST /requests/check (free)
     S-->>B: normalized question, answerType, panel 15 / quorum 11
-    B-->>U: ❓ status card  [Ask free (Sepolia)] [Pay 160 CHR]
+    B->>B: split-risk score · recall of 6.7k prior attestations
+    B-->>U: ❓ card: ✅ prior answer if known · risk · [Pay 160 CHR] [Pay 0.5 IMD]
     alt Pay in CHR
-        B->>P: payments.create(amount, metadata{chatId,msgId,question})
-        P-->>U: hosted checkout, pay from own wallet
-        P->>B: webhook payment.confirmed (HMAC signed)
-    else Free demo
-        U->>B: tap "Ask free"
+        B->>P: payments.create(metadata{chatId,msgId,question})
+        P-->>U: hosted checkout, own wallet
+        P->>B: webhook payment.confirmed (HMAC)
+        B->>R: ask(body) from the house wallet
+    else Pay in IMD
+        U->>R: ask(body) from own wallet (signed link page)
     end
-    B->>I: Intake.request(oracle.request, body, 0.5 IMD)
+    R->>I: requestWithFailure(oracle.request, body, callback=R, 0.5 IMD)
     I-->>S: Requested event
-    B-->>U: ⏳ asked, tx 0x…  [Check status]
-    S->>S: panel of agents assesses, quorum vote
-    U->>B: tap "Check status"
-    B->>S: GET /intake/:chain/:tx → requestId
+    B-->>U: ⏳ asked, tx 0x…  (auto-updates)
+    S->>S: panel assesses, quorum vote
+    S->>I: complete(requestId, attestation, signature)
+    I->>R: onOracleResult: verify EIP-712 onchain, store by questionHash
     B->>S: GET /oracle/requests/:id/attestation
-    S-->>B: EIP-712 attestation + signature
-    B->>B: verifyTypedData (viem), pin signer
-    B-->>U: ✅ Yes · 15/15 agreed · verified  [attestation] [swarm job] [etherscan]
+    B->>B: verifyTypedData, pin signer
+    B-->>U: ✅ CHF · 11/15 agreed · verified  [attestation] [swarm job] [etherscan]
 ```
 
 ### Architecture
@@ -164,18 +166,23 @@ for `payment.confirmed` and `payment.overpaid`, paste the key and `whsec_` into 
 ## Layout
 
 ```
-lib/bot.ts                  grammy handlers: /ask, free, chk
+lib/bot.ts                  grammy handlers: /ask, /examples, free, chk; auto-updating cards
 lib/risk.ts                 split-risk model (features, predict, hints); weights in lib/risk-model.json
 lib/recall.ts               free tier 1: prior attested answers (lib/answers.json)
 lib/quick.ts                free tier 2: unsigned one-liner, needs ANTHROPIC_API_KEY
 functions/telegram.ts       Telegram webhook (bundled by `bun run build` into api/*.mjs for Vercel)
 functions/cpay-webhook.ts   Chromia Pay webhook → ask the swarm
 functions/imd.ts            Pay-with-IMD: signed draft + tx verification behind public/imd.html
+src/AskSwarmRegistry.sol    the onchain memory: pays Intake, verifies the attestation, stores by questionHash
+src/IIntake.sol             the slice of Intake v2 it calls, and the OracleAttestation struct
+test/, script/              mainnet-fork tests (forge test --fork-url $ETH_RPC_URL), deploy script
+contracts/LAUNCH.md         the brief given to the swarm for the evm_contracts launch; contracts/lib vendored forge-std
 docs/brand/                 infographic source (HTML + Chromia brand fonts), rendered to docs/askswarm.png
+docs/SUBMISSION.md          hackathon criteria status, Radar blurb, X posts, evidence list
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
-packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
+packages/imd/src/intake.ts  onchain door: registry or Intake ask, read /intake, registry reads
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
-scripts/                    spike-sepolia.ts (gate), spike.ts, dry-run.ts, approve-permit2.ts, train-risk.ts, build-answers.ts, launch.ts (hire the swarm to deploy the registry)
+scripts/                    spike-sepolia.ts, spike.ts, train-risk.ts, build-answers.ts, launch.ts (hire the swarm)
 ```
 
 ### Pay with IMD from your own wallet
@@ -202,7 +209,7 @@ The paid swarm is the escalation: when the answer has to be signed, fresh, or se
 ### Onchain memory: AskSwarmRegistry
 
 Paid answers do not stop in the chat. With `REGISTRY_ADDRESS` set, every paid ask goes through
-[AskSwarmRegistry](https://github.com/ChromiaAgents/askswarm-registry): the contract pays Intake v2
+[AskSwarmRegistry](src/AskSwarmRegistry.sol): the contract pays Intake v2
 with itself as callback, verifies the swarm's EIP-712 attestation onchain, and stores the answer by
 question hash. Any contract or client can then read what the swarm attested, free, with the proof.
 The registry is launched through the IMD protocol itself (an `evm_contracts` launch: swarm audit,

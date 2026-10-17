@@ -74,7 +74,7 @@
   <header>
     <span class="eyebrow">Identity MD hackathon · Oct 2026</span>
     <h1>Ask<br>the <span class="accent">Swarm</span></h1>
-    <p class="sub">A Telegram bot. Ask a question, <b>pay in CHR</b>, and ~1,000 AI agents vote on the answer. You get a <b>cryptographically signed verdict</b> anyone can re-verify.</p>
+    <p class="sub">A Telegram bot with an onchain memory. Ask a question: 6.7k answers are already free. Otherwise <b>pay in CHR or IMD</b>, ~1,000 AI agents vote, and the <b>signed verdict is stored onchain</b> for every contract to read.</p>
   </header>
 
   <section class="flow">
@@ -82,40 +82,40 @@
       <span class="n">1</span><img class="ic" src="message.svg">
       <h3>Ask</h3>
       <div class="chat">/ask Did Argentina win<br>the 2022 World Cup?</div>
-      <p style="margin-top:12px">Free precheck normalises the question: type, panel 15, quorum 11.</p>
+      <p style="margin-top:12px">Free precheck, split-risk score from 7.8k past requests, and a prior signed answer if the swarm already attested it.</p>
       <span class="meta">Telegram · any group</span>
     </div>
     <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="card" style="--chip:var(--pink);--chip-s:var(--pink-s);--shadow:var(--pink-s)">
       <span class="n">2</span><img class="ic" src="lock.svg">
       <h3>Pay</h3>
-      <span class="btn">Pay 160 CHR</span><span class="btn ghost">Ask free</span>
-      <p style="margin-top:10px">Chromia Pay hosted checkout, non-custodial. Fulfilled only from the signed webhook.</p>
-      <span class="meta">Chromia · BNB Chain · Sepolia demo</span>
+      <span class="btn">Pay 160 CHR</span><span class="btn ghost">0.5 IMD</span>
+      <p style="margin-top:10px">Chromia Pay checkout for non-IMD users, or 0.5 IMD from your own wallet into the registry.</p>
+      <span class="meta">Chromia Pay · own wallet</span>
     </div>
     <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="card" style="--chip:var(--green);--chip-s:var(--green-s);--shadow:var(--green-s)">
       <span class="n">3</span><img class="ic" src="ai.svg">
       <h3>Swarm<br>votes</h3>
       <div class="dots"><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i></div>
-      <p>One on-chain tx opens the question. Agents assess independently; 11 of 15 must agree.</p>
-      <span class="meta">IMD Intake · 0.5 IMD</span>
+      <p>AskSwarmRegistry pays Intake v2 with itself as callback. Agents assess independently; 11 of 15 must agree.</p>
+      <span class="meta">Launched through IMD · swarm-audited</span>
     </div>
     <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="card" style="--chip:var(--yellow);--chip-s:var(--yellow-s);--shadow:var(--yellow-s)">
       <span class="n">4</span><img class="ic" src="data.svg">
       <h3>Signed answer</h3>
       <div class="chat"><span style="color:#93F091;font-weight:700">Yes</span> · 15/15 agreed<br>EIP-712 verified · 0x5598aa91…</div>
-      <p style="margin-top:10px">Signature verified offline. Links to the swarm job and the tx.</p>
-      <span class="meta">Anyone can re-verify</span>
+      <p style="margin-top:10px">Verified onchain in the callback, stored by question hash, posted in chat.</p>
+      <span class="meta">Any contract can read it</span>
     </div>
   </section>
 
   <footer class="strip">
     <div><span class="big"><span class="c">~2</span> min</span><small>question to signed verdict, 73–121 s per panel observed</small></div>
     <div><span class="big"><span class="c">0</span> keys</span><small>Chromia Pay is non-custodial; the bot wallet holds only gas and IMD</small></div>
-    <div><span class="big">No <span class="c">DB</span></span><small>state lives in the chat message and on chain. Two Vercel functions</small></div>
-    <div><span class="big"><span class="c">~4</span>%</span><small>panels end without consensus. Said up front, before you pay</small></div>
+    <div><span class="big">On<span class="c">chain</span></span><small>every answer bought lands in AskSwarmRegistry, EIP-712 verified, no owner</small></div>
+    <div><span class="big"><span class="c">6.7k</span> free</span><small>prior attested answers served instantly, from the open Eval Engine dataset</small></div>
   </footer>
 </body>
 </html>
