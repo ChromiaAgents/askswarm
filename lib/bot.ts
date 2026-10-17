@@ -15,6 +15,20 @@ const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
 const PRICE_CHR = process.env.CPAY_PRICE_CHR ?? "2.00";
 const MAX_Q = 500;
 
+// CHR spot price for the Pay button label. ponytail: CoinGecko free tier, 60s cache per instance, label
+// falls back to CHR only when the lookup fails. Display only, never used for the charge.
+let chrUsd: { v: number; at: number } | null = null;
+async function priceLabel(): Promise<string> {
+  try {
+    if (!chrUsd || Date.now() - chrUsd.at > 60_000) {
+      const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=chromaway&vs_currencies=usd", { signal: AbortSignal.timeout(2500) });
+      chrUsd = { v: Number((await r.json()).chromaway.usd), at: Date.now() };
+    }
+    const usd = Number(PRICE_CHR) * chrUsd.v;
+    return `Pay ${PRICE_CHR} CHR (~$${usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2)})`;
+  } catch { return `Pay ${PRICE_CHR} CHR`; }
+}
+
 export const account = () => privateKeyToAccount(env("EVM_PRIVATE_KEY") as Hex);
 export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.env.CPAY_SECRET_KEY, { baseUrl: process.env.CPAY_API_URL }) : null;
 
@@ -72,8 +86,9 @@ bot.command("ask", async (ctx) => {
     // startapp; public/pay.html forwards into the hosted checkout.
     kb.row();
     const csId = payment.checkout_url.split("/").pop()!;
-    if (ctx.chat.type === "private") kb.webApp(`Pay ${PRICE_CHR} CHR`, payment.checkout_url);
-    else kb.url(`Pay ${PRICE_CHR} CHR`, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
+    const label = await priceLabel();
+    if (ctx.chat.type === "private") kb.webApp(label, payment.checkout_url);
+    else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
     await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
   }
 });
