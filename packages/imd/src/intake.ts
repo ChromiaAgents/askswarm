@@ -15,11 +15,11 @@ export const CHAINS = {
 } as const;
 export type IntakeChainId = keyof typeof CHAINS;
 
-const intakeAbi = parseAbi([
+export const intakeAbi = parseAbi([
   "function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32 requestId)",
 ]);
 const mintAbi = parseAbi(["function mint(address to, uint256 amount)"]);
-const ACTION_ID = stringToHex("oracle.request@oracle-1", { size: 32 });
+export const ACTION_ID = stringToHex("oracle.request@oracle-1", { size: 32 });
 
 export function clients(chainId: IntakeChainId, account: PrivateKeyAccount) {
   const c = CHAINS[chainId];
@@ -50,13 +50,17 @@ export async function ensureAllowance(chainId: IntakeChainId, account: PrivateKe
   return hash;
 }
 
+/** Arguments for Intakev2.request, for a wallet other than the house (the Pay-with-IMD page). */
+export const requestArgs = (chainId: IntakeChainId, body: OracleRequestBody) =>
+  [ACTION_ID, stringToHex(JSON.stringify(body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, CHAINS[chainId].imd, PRICE] as const;
+
 /** Pays 0.5 IMD and asks. Returns tx hash; the plane indexes it at GET /intake/:chainId/:tx. */
 export async function ask(chainId: IntakeChainId, account: PrivateKeyAccount, body: OracleRequestBody): Promise<Hex> {
-  const { cfg, wallet } = clients(chainId, account);
+  const { wallet } = clients(chainId, account);
   // ponytail: no nonce manager; one hot wallet, low volume. Add viem nonceManager if webhooks ever overlap.
   return wallet.writeContract({
     address: INTAKE, abi: intakeAbi, functionName: "request",
-    args: [ACTION_ID, stringToHex(JSON.stringify(body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, cfg.imd, PRICE],
+    args: requestArgs(chainId, body),
   });
 }
 

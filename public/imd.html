@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskSwarm · Pay with IMD</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Regular_Webfont.ttf) format("truetype");font-weight:400}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Bold_Webfont.ttf) format("truetype");font-weight:700}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F5EEEE;color:#1F1A23;font:17px/1.45 "NB International",Helvetica,Arial,sans-serif;padding:24px;box-sizing:border-box}
+  .card{max-width:460px;width:100%;background:#fff;border:2px solid #1F1A23;border-radius:20px;padding:22px;box-shadow:6px 6px 0 #1F1A23}
+  h1{font-size:22px;margin:0 0 6px}
+  .q{background:#F5EEEE;border:2px solid #1F1A23;border-radius:14px;padding:12px 14px;margin:14px 0;font-weight:700}
+  .meta{font-size:14px;color:#5a5260}
+  button{width:100%;margin-top:14px;background:#CC91F0;border:2px solid #1F1A23;border-radius:999px;padding:14px 18px;font:inherit;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 #1F1A23}
+  button:disabled{opacity:.5;cursor:default;box-shadow:none}
+  .log{margin-top:14px;font-size:14px;white-space:pre-wrap}
+  .ok{color:#2e8b2b}.err{color:#c2185b}
+  a{color:#9E5ECF}
+</style>
+</head>
+<body>
+<div class="card">
+  <img src="/logo.svg" alt="" width="56" height="56" style="border-radius:14px">
+  <h1>Pay 0.5 IMD, ask the swarm</h1>
+  <div class="meta">From your own wallet on Ethereum mainnet. The signed attestation is addressed to you.</div>
+  <div class="q" id="q">Loading…</div>
+  <div class="meta" id="draft"></div>
+  <button id="go" disabled>Connect wallet</button>
+  <div class="log" id="log"></div>
+</div>
+<script type="module">
+  import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, formatUnits } from "https://esm.sh/viem@2.57.7";
+  import { mainnet } from "https://esm.sh/viem@2.57.7/chains";
+
+  const P = new URLSearchParams(location.search);
+  const params = { c: P.get("c"), m: P.get("m"), q: P.get("q"), s: P.get("s") };
+  const $ = (id) => document.getElementById(id);
+  const log = (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; $("log").appendChild(d); };
+  const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
+
+  $("q").textContent = params.q || "Missing question. Go back to Telegram and tap the button again.";
+  if (!params.q) throw new Error("no params");
+
+  const api = "/api/imd?" + new URLSearchParams(params);
+  const draft = await fetch(api).then((r) => r.json());
+  if (draft.error) { $("q").textContent = draft.error === "blocked" ? "The swarm won't take this one." : "This link is not valid."; throw new Error(draft.error); }
+  $("draft").textContent = `${draft.request.answerType} · panel ${draft.request.panelSize}, quorum ${draft.request.quorum} · costs 0.5 IMD + gas, not refunded if the panel splits`;
+
+  if (!window.ethereum) {
+    $("go").textContent = "No wallet found";
+    log("Open this page inside a wallet browser (MetaMask, Rabby) or on desktop with a wallet extension.", "err");
+    const a = document.createElement("a"); a.href = location.href; a.textContent = "Copy this link into your wallet's browser";
+    a.onclick = (e) => { e.preventDefault(); navigator.clipboard?.writeText(location.href); log("Link copied."); }; $("log").appendChild(a);
+  } else {
+    $("go").disabled = false;
+  }
+
+  $("go").onclick = async () => {
+    const btn = $("go"); btn.disabled = true;
+    try {
+      const wallet = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
+      const pub = createPublicClient({ chain: mainnet, transport: custom(window.ethereum) });
+      const [account] = await wallet.requestAddresses();
+      log(`Wallet ${account.slice(0, 6)}…${account.slice(-4)}`);
+      if ((await wallet.getChainId()) !== 1) { btn.textContent = "Switch to Ethereum…"; await wallet.switchChain({ id: 1 }); }
+
+      const amount = BigInt(draft.amount);
+      const [bal, allowance] = await Promise.all([
+        pub.readContract({ address: draft.asset, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
+        pub.readContract({ address: draft.asset, abi: erc20Abi, functionName: "allowance", args: [account, draft.intake] }),
+      ]);
+      if (bal < amount) { log(`You hold ${formatUnits(bal, 18)} IMD, need 0.5.`, "err"); btn.textContent = "Not enough IMD"; return; }
+
+      if (allowance < amount) {
+        btn.textContent = "Approve 0.5 IMD…";
+        const h = await wallet.writeContract({ account, address: draft.asset, abi: erc20Abi, functionName: "approve", args: [draft.intake, amount] });
+        log("Approve sent, waiting…"); await pub.waitForTransactionReceipt({ hash: h }); log("Approved.", "ok");
+      }
+
+      btn.textContent = "Confirm request in wallet…";
+      const tx = await wallet.writeContract({ account, address: draft.intake, abi: intakeAbi, functionName: "request",
+        args: [draft.args.action, draft.args.body, draft.args.callback, draft.asset, amount] });
+      log(`Request sent: ${tx.slice(0, 10)}… waiting for confirmation.`);
+      const rcpt = await pub.waitForTransactionReceipt({ hash: tx });
+      if (rcpt.status !== "success") { log("Transaction reverted.", "err"); btn.textContent = "Reverted"; return; }
+
+      btn.textContent = "Telling the bot…";
+      const res = await fetch("/api/imd", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...params, tx }) }).then((r) => r.json());
+      if (!res.ok) { log(`Bot did not accept the tx: ${res.error}. Keep the hash: ${tx}`, "err"); btn.textContent = "Done, but not linked"; return; }
+      log("Asked. Back in Telegram, tap Check status in 1–3 min.", "ok");
+      btn.textContent = "Done";
+      const a = document.createElement("a"); a.href = `https://etherscan.io/tx/${tx}`; a.textContent = "View on Etherscan"; $("log").appendChild(a);
+    } catch (e) {
+      log(e?.shortMessage || e?.message || String(e), "err");
+      btn.textContent = "Try again"; btn.disabled = false;
+    }
+  };
+</script>
+</body>
+</html>

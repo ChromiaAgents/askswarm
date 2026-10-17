@@ -168,12 +168,21 @@ lib/bot.ts                  grammy handlers: /ask, free, chk
 lib/risk.ts                 split-risk model (features, predict, hints); weights in lib/risk-model.json
 functions/telegram.ts       Telegram webhook (bundled by `bun run build` into api/*.mjs for Vercel)
 functions/cpay-webhook.ts   Chromia Pay webhook → ask the swarm
+functions/imd.ts            Pay-with-IMD: signed draft + tx verification behind public/imd.html
 docs/brand/                 infographic source (HTML + Chromia brand fonts), rendered to docs/askswarm.png
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
 packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
 scripts/                    spike-sepolia.ts (free gate), spike.ts (mainnet), dry-run.ts, approve-permit2.ts, train-risk.ts
 ```
+
+### Pay with IMD from your own wallet
+
+Mainnet cards carry a second button, "Pay 0.5 IMD (your wallet)". It opens `public/imd.html` with a
+link the bot signed over (chat, message, question). The page fetches the drafted request from
+`api/imd`, has the user's wallet approve 0.5 IMD and call `Intakev2.request` directly, then posts
+the tx hash back. The endpoint checks the tx on chain (to Intakev2, `oracle.request`, same question)
+before marking the card. The attestation is then addressed to the payer, not the house wallet.
 
 ## Pricing
 

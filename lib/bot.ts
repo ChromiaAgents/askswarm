@@ -3,6 +3,7 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { privateKeyToAccount } from "viem/accounts";
 import { decodeAbiParameters, type Hex } from "viem";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
@@ -32,6 +33,18 @@ async function priceLabel(): Promise<string> {
     return `Pay ${PRICE_CHR} CHR (~$${usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2)})`;
   } catch { return `Pay ${PRICE_CHR} CHR`; }
 }
+
+// Pay-with-IMD link: the page gets chat/message ids and the question in the URL, signed so only the bot
+// can mint one. Reuses the webhook secret rather than adding another env var.
+export const BASE_URL = process.env.PUBLIC_URL ?? "https://askswarm-nine.vercel.app";
+export const sign = (chatId: number | string, msgId: number, question: string) =>
+  createHmac("sha256", env("TELEGRAM_WEBHOOK_SECRET")).update(`${chatId}\n${msgId}\n${question}`).digest("hex").slice(0, 32);
+export const verifySig = (chatId: string, msgId: number, question: string, sig: string) => {
+  const want = new TextEncoder().encode(sign(chatId, msgId, question)), got = new TextEncoder().encode(sig ?? "");
+  return want.length === got.length && timingSafeEqual(want, got);
+};
+export const imdPayUrl = (chatId: number | string, msgId: number, question: string) =>
+  `${BASE_URL}/imd?c=${chatId}&m=${msgId}&q=${encodeURIComponent(question)}&s=${sign(chatId, msgId, question)}`;
 
 export const account = () => privateKeyToAccount(env("EVM_PRIVATE_KEY") as Hex);
 export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.env.CPAY_SECRET_KEY, { baseUrl: process.env.CPAY_API_URL }) : null;
@@ -73,7 +86,6 @@ bot.command("ask", async (ctx) => {
   const kb = new InlineKeyboard();
   if (canAskFree(ctx)) kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : "Ask free (house pays)", "free");
   const status = await ctx.reply(text, { parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
-
   const pay = cpay();
   if (pay) {
     const askId = `${ctx.chat.id}:${status.message_id}`;
@@ -93,19 +105,25 @@ bot.command("ask", async (ctx) => {
     const label = await priceLabel();
     if (ctx.chat.type === "private") kb.webApp(label, payment.checkout_url);
     else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
-    await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
   }
+  // Pay in IMD from the user's own wallet: attestation is then addressed to them, not the house.
+  if (ASK_CHAIN === 1) kb.row().url("Pay 0.5 IMD (your wallet)", imdPayUrl(ctx.chat.id, status.message_id, r.question));
+  if (pay || ASK_CHAIN === 1) await ctx.api.editMessageReplyMarkup(ctx.chat.id, status.message_id, { reply_markup: kb });
 });
 
 // ---- ask the swarm (shared by free button and paid webhook) --------------------------------------
+export async function markAsked(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId, tx: Hex, panelSize: number, who = "") {
+  await bot.api.editMessageText(chatId, msgId,
+    `❓ ${esc(question)}\n⏳ Asked the swarm on ${chainName(chainId)}${who}. Panel of ${panelSize} is assessing, usually 1–3 min.\ntx ${chainName(chainId)} ${tx}\n<a href="${txUrl(chainId, tx)}">etherscan</a>`,
+    { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: new InlineKeyboard().text("Check status", "chk") });
+}
+
 export async function askAndMark(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId) {
   const chk = await imd.check(question, PANEL);
   if (!chk.request || chk.blockers?.length) throw new Error(`check failed: ${chk.blockers?.map((b) => b.code).join("; ")}`);
   if (intake.CHAINS[chainId].free) await intake.ensureAllowance(chainId, account());
   const tx = await intake.ask(chainId, account(), chk.request);
-  await bot.api.editMessageText(chatId, msgId,
-    `❓ ${esc(question)}\n⏳ Asked the swarm on ${chainName(chainId)}. Panel of ${chk.request.panelSize} is assessing, usually 1–3 min.\ntx ${chainName(chainId)} ${tx}\n<a href="${txUrl(chainId, tx)}">etherscan</a>`,
-    { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: new InlineKeyboard().text("Check status", "chk") });
+  await markAsked(chatId, msgId, question, chainId, tx, chk.request.panelSize);
   return tx;
 }
 
