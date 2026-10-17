@@ -195,8 +195,9 @@ bot.callbackQuery("free", async (ctx) => {
 function decodeAnswer(m: Record<string, any>): string {
   try {
     switch (m.answerType) {
-      case "bool": return BigInt(m.figure) === 1n ? "Yes" : "No";
-      case "uint256": return String(m.figure);
+      // `answer` is abi.encode of the value; `figure` is 0 for bools, so decode the bytes.
+      case "bool": return (decodeAbiParameters([{ type: "bool" }], m.answer)[0] as boolean) ? "Yes" : "No";
+      case "uint256": return String(decodeAbiParameters([{ type: "uint256" }], m.answer)[0]);
       case "address": return decodeAbiParameters([{ type: "address" }], m.answer)[0] as string;
       case "bytes32": {
         const t = hexToString(m.answer as Hex).replace(/\0+$/, "");

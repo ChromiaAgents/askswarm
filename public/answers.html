@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskSwarm · What the swarm knows</title>
+<meta name="description" content="Every answer anyone bought from the IMD swarm through AskSwarmRegistry, verified onchain, readable by anyone.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @font-face{font-family:"Battlefin";src:url(/fonts/Battlefin-Black.otf) format("opentype");font-weight:900}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Regular_Webfont.ttf) format("truetype");font-weight:400}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Bold_Webfont.ttf) format("truetype");font-weight:700}
+  @font-face{font-family:"NB Mono";src:url(/fonts/NB_International_Mono_Webfont.ttf) format("truetype")}
+  :root{--bg:#F5EEEE;--ink:#1F1A23;--purple:#CC91F0;--purple-s:#9E5ECF;--pink:#FFB0C2;--pink-s:#FF87A6;--yellow:#FFB500;--green:#93F091;--green-s:#4FCD4C}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "NB International",Helvetica,Arial,sans-serif;padding:24px 16px 64px}
+  .wrap{max-width:1100px;margin:0 auto}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  header img{width:56px;height:56px;border-radius:14px}
+  h1{font:900 40px/1 "Battlefin",Georgia,serif;margin:0}
+  h1 span{color:var(--purple-s)}
+  .sub{margin:6px 0 18px;max-width:720px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}
+  .pill{display:inline-block;border:2px solid var(--ink);border-radius:999px;padding:6px 14px;font-weight:700;background:#fff;box-shadow:3px 3px 0 var(--ink)}
+  .pill.g{background:var(--green)}.pill.p{background:var(--purple)}.pill.y{background:var(--yellow)}
+  input{width:100%;font:inherit;padding:12px 14px;border:2px solid var(--ink);border-radius:14px;background:#fff;margin:0 0 16px;box-shadow:4px 4px 0 var(--ink)}
+  .card{background:#fff;border:2px solid var(--ink);border-radius:18px;padding:14px 16px;margin:0 0 12px;box-shadow:5px 5px 0 var(--ink)}
+  .q{font-weight:700;margin:0 0 6px}
+  .a{font:900 28px/1.1 "Battlefin",Georgia,serif;margin:0 0 6px;word-break:break-all}
+  .a.no{color:var(--pink-s);font-size:20px}
+  .meta{font:13px/1.5 "NB Mono",monospace;color:#5a5260}
+  .meta a{color:var(--purple-s)}
+  .tag{display:inline-block;border:2px solid var(--ink);border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700;margin-right:6px;background:var(--green)}
+  .tag.warn{background:var(--pink)}.tag.wait{background:var(--yellow)}
+  footer{margin-top:28px;font-size:14px;color:#5a5260}
+  footer a{color:var(--purple-s)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1F1A23;--ink:#F5EEEE}:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) input,:root:not([data-theme="light"]) .pill{background:#2a2430;color:#F5EEEE}:root:not([data-theme="light"]) .meta,:root:not([data-theme="light"]) footer{color:#bdb3c4}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo.svg" alt="">
+    <div>
+      <h1>What the <span>swarm</span> knows</h1>
+      <p class="sub">Every answer anyone bought from the IMD swarm through <a href="https://etherscan.io/address/REGISTRY" id="reglink">AskSwarmRegistry</a>. Verified onchain in the callback, stored by question hash, free for any contract or person to read. Ask your own in Telegram: <a href="https://t.me/askswarm_bot">@askswarm_bot</a>.</p>
+    </div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <input id="q" placeholder="Search questions and answers…" autocomplete="off">
+  <div id="list"><div class="card">Loading from Ethereum…</div></div>
+  <footer>
+    Data: <a href="/api/answers">/api/answers</a> (JSON, CORS open). Agents: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a>. Code: <a href="https://github.com/ChromiaAgents/askswarm">github.com/ChromiaAgents/askswarm</a>. Built for the Identity MD hackathon.
+  </footer>
+</div>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let rows = [];
+  const fmt = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "";
+  function render() {
+    const q = $("#q").value.trim().toLowerCase();
+    const hit = q ? rows.filter((r) => (r.question + " " + (r.answer || "")).toLowerCase().includes(q)) : rows;
+    $("#list").innerHTML = hit.length ? hit.map((r) => {
+      const tag = r.status === "answered" ? `<span class="tag">verified onchain</span>` : r.status === "pending" ? `<span class="tag wait">panel working</span>` : `<span class="tag warn">${esc(r.status)}${r.reason ? " · " + esc(r.reason) : ""}</span>`;
+      const ans = r.status === "answered" ? `<p class="a">${esc(r.answer)}</p>` : r.status === "pending" ? `<p class="a no">…</p>` : `<p class="a no">no consensus</p>`;
+      const panel = r.panelSize ? `${r.agreed}/${r.panelSize} agreed (quorum ${r.quorum}) · ${esc(r.answerType)} · valid until ${fmt(r.expiresAt)} · ` : "";
+      return `<div class="card"><p class="q">${esc(r.question)}</p>${ans}<div class="meta">${tag} ${panel}<a href="https://etherscan.io/tx/${r.askTx}">ask tx</a>${r.resultTx ? ` · <a href="https://etherscan.io/tx/${r.resultTx}">callback tx</a>` : ""} · asker ${esc(r.asker.slice(0, 8))}…${r.questionHash ? ` · qh ${esc(r.questionHash.slice(0, 10))}…` : ""}</div></div>`;
+    }).join("") : `<div class="card">Nothing matches.</div>`;
+  }
+  fetch("/api/answers?limit=1000").then((r) => r.json()).then((d) => {
+    rows = d.rows || [];
+    if (d.registries && d.registries[0]) $("#reglink").href = "https://etherscan.io/address/" + d.registries[0];
+    const v = rows.filter((r) => r.status === "answered").length, n = rows.filter((r) => r.status === "no result" || r.status === "refused").length;
+    $("#stats").innerHTML = `<span class="pill p">${rows.length} asked</span><span class="pill g">${v} verified onchain</span><span class="pill y">${n} no consensus</span>`;
+    render();
+  }).catch(() => { $("#list").innerHTML = `<div class="card">Could not reach the chain right now. Try again in a minute.</div>`; });
+  $("#q").addEventListener("input", render);
+</script>
+</body>
+</html>
