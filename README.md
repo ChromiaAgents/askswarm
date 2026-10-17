@@ -166,6 +166,8 @@ for `payment.confirmed` and `payment.overpaid`, paste the key and `whsec_` into 
 ```
 lib/bot.ts                  grammy handlers: /ask, free, chk
 lib/risk.ts                 split-risk model (features, predict, hints); weights in lib/risk-model.json
+lib/recall.ts               free tier 1: prior attested answers (lib/answers.json)
+lib/quick.ts                free tier 2: unsigned one-liner, needs ANTHROPIC_API_KEY
 functions/telegram.ts       Telegram webhook (bundled by `bun run build` into api/*.mjs for Vercel)
 functions/cpay-webhook.ts   Chromia Pay webhook → ask the swarm
 functions/imd.ts            Pay-with-IMD: signed draft + tx verification behind public/imd.html
@@ -173,7 +175,7 @@ docs/brand/                 infographic source (HTML + Chromia brand fonts), ren
 packages/imd/src/index.ts   HTTP door: check, quote, x402 pay, poll, attestation verify
 packages/imd/src/intake.ts  onchain door: mint test IMD, approve, request, read /intake
 packages/cpay/src/index.ts  Chromia Pay Node SDK (vendored, MIT)
-scripts/                    spike-sepolia.ts (free gate), spike.ts (mainnet), dry-run.ts, approve-permit2.ts, train-risk.ts
+scripts/                    spike-sepolia.ts (gate), spike.ts, dry-run.ts, approve-permit2.ts, train-risk.ts, build-answers.ts
 ```
 
 ### Pay with IMD from your own wallet
@@ -183,6 +185,19 @@ link the bot signed over (chat, message, question). The page fetches the drafted
 `api/imd`, has the user's wallet approve 0.5 IMD and call `Intakev2.request` directly, then posts
 the tx hash back. The endpoint checks the tx on chain (to Intakev2, `oracle.request`, same question)
 before marking the card. The attestation is then addressed to the payer, not the house wallet.
+
+### Free before paid
+
+Two free tiers sit above the paid swarm on every card:
+
+1. **Recall.** `lib/answers.json` holds 6,729 questions the swarm already attested (from the raw
+   oracle records in the Eval Engine dataset). An exact or near-exact match (token Jaccard ≥ 0.9)
+   shows that signed answer, its agreement count and the attestation link at no cost. Rebuild with
+   `bun scripts/build-answers.ts <oracle-requests.jsonl>`.
+2. **Quick take.** One unsigned line from a single model (`claude-haiku-5-5`), only when
+   `ANTHROPIC_API_KEY` is set. Labelled unsigned on the card; replies "unsure" rather than guess.
+
+The paid swarm is the escalation: when the answer has to be signed, fresh, or settle something.
 
 ## Pricing
 

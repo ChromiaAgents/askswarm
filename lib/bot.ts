@@ -9,6 +9,8 @@ import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
+import { recall } from "./recall";
+import { quickTake } from "./quick";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
@@ -97,14 +99,20 @@ bot.command("ask", async (ctx) => {
   const p = risk.predict(r), lvl = risk.riskLabel(p), why = risk.hints(r);
   const riskLine = `${lvl === "low" ? "🟢" : lvl === "medium" ? "🟡" : "🔴"} Split risk ${lvl} (${Math.round(p * 100)}%)` +
     (why.length && lvl !== "low" ? `\n<i>${why.map(esc).join("; ")}</i>` : "");
-  const cost = await imdCostLine();
-  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n\n${riskLine}\nYou buy the panel, not the answer: it costs ${esc(cost)} and a split panel is not refunded.`;
+  // Free tiers first: a prior signed swarm answer from the Eval Engine dataset, then an unsigned
+  // one-liner from a single model. The paid swarm below is the escalation, not the default.
+  const [cost, prior, quick] = await Promise.all([imdCostLine(), Promise.resolve(recall(r.question)), quickTake(r.question)]);
+  const free = [
+    prior ? `♻️ Swarm already attested this on ${prior.at.slice(0, 10)}: <b>${esc(prior.a)}</b> <i>(${prior.agreed}/${prior.panel} agreed)</i> · <a href="${imd.IMD_API}/oracle/requests/${prior.id}/attestation">attestation</a>` : "",
+    quick ? `💬 Quick take, unsigned AI: <i>${esc(quick)}</i>` : "",
+  ].filter(Boolean).join("\n");
+  const text = `❓ ${esc(r.question)}\n<i>${esc(r.answerType)} · panel ${r.panelSize}, quorum ${r.quorum} · ${esc(chk.online ?? "?")} agents online</i>\n${free ? `\n${free}\n` : ""}\n${riskLine}\n${free ? "Need a fresh signed verdict? " : ""}You buy the panel, not the answer: it costs ${esc(cost)} and a split panel is not refunded.`;
   const kb = new InlineKeyboard();
   if (canAskFree(ctx)) {
     const p = await spot("imd");
     kb.text(intake.CHAINS[ASK_CHAIN].free ? "Ask free (Sepolia)" : `Ask free (house pays${p ? ` ~${usd(0.5 * p)}` : ""})`, "free");
   }
-  const status = await ctx.reply(text, { parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
+  const status = await ctx.reply(text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: { message_id: ctx.msg.message_id }, reply_markup: kb });
   const pay = cpay();
   if (pay) {
     const askId = `${ctx.chat.id}:${status.message_id}`;
