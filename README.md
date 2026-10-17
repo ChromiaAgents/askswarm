@@ -212,9 +212,16 @@ Paid answers do not stop in the chat. With `REGISTRY_ADDRESS` set, every paid as
 [AskSwarmRegistry](src/AskSwarmRegistry.sol): the contract pays Intake v2
 with itself as callback, verifies the swarm's EIP-712 attestation onchain, and stores the answer by
 question hash. Any contract or client can then read what the swarm attested, free, with the proof.
-The registry is launched through the IMD protocol itself (an `evm_contracts` launch: swarm audit,
-adaptation, tests, specialist audits, deploy). Sepolia test deployment
-`0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900`.
+The registry was launched through the IMD protocol itself: [launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa)
+(swarm audit of the import, adaptation, tests, four specialist audits, judge, deploy), job
+[64fa31ee](https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852). What the swarm changed
+and why is in [contracts/ADAPTATION.md](contracts/ADAPTATION.md); `src/` and `test/` here are the
+accepted versions.
+
+| chain | AskSwarmRegistry |
+|---|---|
+| Ethereum mainnet (swarm-deployed, verified) | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
+| Sepolia (self-deployed, pre-audit build) | `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900` |
 
 ## Pricing
 

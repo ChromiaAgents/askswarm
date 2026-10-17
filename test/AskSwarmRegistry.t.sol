@@ -4,9 +4,12 @@ pragma solidity ^0.8.26;
 import {Test, Vm} from "forge-std/Test.sol";
 import {AskSwarmRegistry} from "../src/AskSwarmRegistry.sol";
 import {IIntake, OracleAttestation} from "../src/IIntake.sol";
+import {MockIntake, MockERC20} from "./mocks/IntakeMocks.sol";
 
-/// Runs against a mainnet fork: `forge test --fork-url $ETH_RPC_URL`.
-/// Intake v2 and IMD are the real contracts; the plane's writer is impersonated to deliver results.
+/// Runs against a mainnet fork (`forge test --fork-url $ETH_RPC_URL`), where Intake v2 and IMD are the
+/// real contracts and the plane's writer is impersonated to deliver results. Without a fork (plain
+/// `forge test`, no network) the same tests run against mocks of Intake v2 and IMD etched at the real
+/// addresses, on chain id 1 with a mainnet-like block and timestamp.
 contract AskSwarmRegistryTest is Test {
     address constant INTAKE = 0xa43e6F75ee006411F79Ac1C84120606C2330DE82;
     address constant IMD = 0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7;
@@ -22,6 +25,13 @@ contract AskSwarmRegistryTest is Test {
         '{"v":1,"question":"What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only.","chainId":1,"window":{"hours":24},"answerType":"bytes32","evidence":"panel","panelSize":15,"quorum":11,"validForSeconds":86400}';
 
     function setUp() public {
+        if (INTAKE.code.length == 0) {
+            vm.chainId(1);
+            vm.roll(26_300_000);
+            vm.warp(1_792_300_000);
+            vm.etch(IMD, address(new MockERC20()).code);
+            vm.etch(INTAKE, address(new MockIntake(makeAddr("writer"), IMD)).code);
+        }
         reg = new AskSwarmRegistry(INTAKE, IMD, vm.addr(TEST_PK));
         regReal = new AskSwarmRegistry(INTAKE, IMD, ORACLE_SIGNER);
         harness = new Harness(INTAKE, IMD, ORACLE_SIGNER);
@@ -121,7 +131,10 @@ contract AskSwarmRegistryTest is Test {
     function test_failureRecorded() public {
         bytes32 id = _ask();
         vm.prank(IIntake(INTAKE).writer());
-        IIntake(INTAKE).complete(id, 2, bytes32(0), "", abi.encode(id, uint8(2), bytes32("disagreed"), uint16(10), uint16(14), bytes("")));
+        IIntake(INTAKE)
+            .complete(
+                id, 2, bytes32(0), "", abi.encode(id, uint8(2), bytes32("disagreed"), uint16(10), uint16(14), bytes(""))
+            );
         (AskSwarmRegistry.Ask memory k,) = reg.get(id);
         assertEq(uint8(k.status), uint8(AskSwarmRegistry.Status.NoResult));
     }
@@ -139,7 +152,9 @@ contract AskSwarmRegistryTest is Test {
         // address[] answers are the biggest the oracle returns; 10 addresses = 352 bytes.
         bytes32 id = _ask();
         bytes memory big = new bytes(352);
-        for (uint256 i; i < big.length; i++) big[i] = bytes1(uint8(i));
+        for (uint256 i; i < big.length; i++) {
+            big[i] = bytes1(uint8(i));
+        }
         OracleAttestation memory a = _mint(id, 0x4444, big, 4, 11);
         bytes memory sig = _sign(reg, a);
         vm.recordLogs();
@@ -179,7 +194,8 @@ contract AskSwarmRegistryTest is Test {
     /// margin under Intake's 200k stipend is a number in the test output, not a guess.
     function test_callbackGasMargin() public {
         bytes32 id = _ask();
-        OracleAttestation memory a = _mint(id, 0x5555, hex"4348460000000000000000000000000000000000000000000000000000000000", 2, 11);
+        OracleAttestation memory a =
+            _mint(id, 0x5555, hex"4348460000000000000000000000000000000000000000000000000000000000", 2, 11);
         bytes memory sig = _sign(reg, a);
         vm.prank(INTAKE);
         uint256 g0 = gasleft();
@@ -269,14 +285,18 @@ contract AskSwarmRegistryTest is Test {
     }
 
     function test_expiredAtDeliveryAndAnswerBoundaries() public {
-        // expired at delivery: verified (signature is good) but never indexed
+        // expired at delivery: not verified, recorded Unverified, never indexed (audit finding c2c8fea2;
+        // this test used to assert verified == true, the behaviour the brief rules out)
         bytes32 id = _ask();
         OracleAttestation memory a = _mintP(id, 0xbbbb, hex"01", 0, 15, 11, 11, uint64(block.timestamp + 10));
         bytes memory sig = _sign(reg, a);
         vm.warp(block.timestamp + 11);
+        vm.recordLogs();
         _deliver(id, a, sig);
-        (, AskSwarmRegistry.Answer memory ans) = reg.get(id);
-        assertTrue(ans.verified, "signature still good");
+        assertTrue(_delivered(), "delivered");
+        (AskSwarmRegistry.Ask memory ke, AskSwarmRegistry.Answer memory ans) = reg.get(id);
+        assertFalse(ans.verified, "expired at delivery is not verified");
+        assertEq(uint8(ke.status), uint8(AskSwarmRegistry.Status.Unverified));
         assertEq(reg.latestFor(bytes32(uint256(0xbbbb))), bytes32(0), "expired is not indexed");
         assertFalse(reg.isCurrent(bytes32(uint256(0xbbbb))));
 
@@ -284,7 +304,9 @@ contract AskSwarmRegistryTest is Test {
         uint256[4] memory lens = [uint256(0), 31, 32, 33];
         for (uint256 i; i < 4; i++) {
             bytes memory ansBytes = new bytes(lens[i]);
-            for (uint256 j; j < ansBytes.length; j++) ansBytes[j] = bytes1(uint8(0x41 + j));
+            for (uint256 j; j < ansBytes.length; j++) {
+                ansBytes[j] = bytes1(uint8(0x41 + j));
+            }
             bytes32 idn = _ask();
             OracleAttestation memory an = _mint(idn, 0xcc00 + i, ansBytes, 2, 11);
             vm.recordLogs();
@@ -307,6 +329,119 @@ contract AskSwarmRegistryTest is Test {
         assertEq(uint8(kh.status), uint8(AskSwarmRegistry.Status.Unverified));
     }
 
+    /// Audit finding c2c8fea2, boundary: an attestation delivered exactly at `expiresAt` is still valid.
+    function test_expiryBoundaryAtDelivery() public {
+        bytes32 id = _ask();
+        OracleAttestation memory a = _mintP(id, 0xbbbc, hex"01", 0, 15, 11, 11, uint64(block.timestamp + 10));
+        bytes memory sig = _sign(reg, a);
+        vm.warp(block.timestamp + 10);
+        _deliver(id, a, sig);
+        (AskSwarmRegistry.Ask memory k, AskSwarmRegistry.Answer memory ans) = reg.get(id);
+        assertTrue(ans.verified, "valid at expiresAt");
+        assertEq(uint8(k.status), uint8(AskSwarmRegistry.Status.Answered));
+        assertEq(reg.latestFor(bytes32(uint256(0xbbbc))), id);
+    }
+
+    /// Audit finding ddc3dd9c, as reported: a 100-seat, quorum-2 panel whose plurality got 11 votes
+    /// must not displace an 11-of-15 answer.
+    function test_minorityOfLargePanelCannotDisplaceSupermajority() public {
+        bytes32 qh = bytes32(uint256(0xeeee));
+        bytes32 strong = _ask();
+        OracleAttestation memory a = _mintP(strong, 0xeeee, "CHF", 2, 15, 11, 11, uint64(block.timestamp + 1 days));
+        _deliver(strong, a, _sign(reg, a));
+        assertEq(reg.latestFor(qh), strong);
+
+        bytes32 weak = _ask();
+        OracleAttestation memory w = _mintP(weak, 0xeeee, "EUR", 2, 100, 2, 11, uint64(block.timestamp + 1 days));
+        _deliver(weak, w, _sign(reg, w));
+        assertEq(reg.latestFor(qh), strong, "11% answer must not displace a 73% one");
+        (, AskSwarmRegistry.Answer memory held) = reg.answerOf(qh);
+        assertEq(held.answer, bytes("CHF"));
+        (AskSwarmRegistry.Ask memory kw, AskSwarmRegistry.Answer memory aw) = reg.get(weak);
+        assertTrue(aw.verified, "still a verified delivery, for the record");
+        assertEq(uint8(kw.status), uint8(AskSwarmRegistry.Status.Answered));
+
+        // a majority of the larger panel still displaces it
+        bytes32 maj = _ask();
+        OracleAttestation memory m = _mintP(maj, 0xeeee, "EUR", 2, 100, 2, 51, uint64(block.timestamp + 1 days));
+        _deliver(maj, m, _sign(reg, m));
+        assertEq(reg.latestFor(qh), maj);
+    }
+
+    /// Audit finding ddc3dd9c: with nothing held, a minority answer is not indexed either; exactly half is not a majority.
+    function test_minorityAnswerNotIndexedEvenWhenNothingHeld() public {
+        bytes32 id = _ask();
+        OracleAttestation memory a = _mintP(id, 0xef01, hex"01", 0, 20, 2, 10, uint64(block.timestamp + 1 days));
+        _deliver(id, a, _sign(reg, a));
+        assertEq(reg.latestFor(bytes32(uint256(0xef01))), bytes32(0), "10 of 20 is not a majority");
+        assertFalse(reg.isCurrent(bytes32(uint256(0xef01))));
+
+        bytes32 id2 = _ask();
+        OracleAttestation memory b = _mintP(id2, 0xef01, hex"01", 0, 20, 2, 11, uint64(block.timestamp + 1 days));
+        _deliver(id2, b, _sign(reg, b));
+        assertEq(reg.latestFor(bytes32(uint256(0xef01))), id2, "11 of 20 is");
+    }
+
+    /// Whatever the panel shape, an indexed answer is verified, unexpired and a strict majority of its panel.
+    function testFuzz_indexedAnswersAreMajorities(uint16 panel, uint16 quorum, uint16 agreed, uint32 ttl, uint32 late)
+        public
+    {
+        panel = uint16(bound(panel, 2, 100));
+        quorum = uint16(bound(quorum, 1, panel));
+        agreed = uint16(bound(agreed, 0, panel));
+        uint64 expiresAt = uint64(block.timestamp + bound(ttl, 0, 30 days));
+        bytes32 id = _ask();
+        OracleAttestation memory a = _mintP(id, 0xf00d, hex"01", 0, panel, quorum, agreed, expiresAt);
+        bytes memory sig = _sign(reg, a);
+        vm.warp(block.timestamp + bound(late, 0, 31 days));
+        _deliver(id, a, sig);
+        (, AskSwarmRegistry.Answer memory ans) = reg.get(id);
+        assertEq(ans.verified, agreed >= quorum && block.timestamp <= expiresAt);
+        bool isIndexed = reg.latestFor(bytes32(uint256(0xf00d))) == id;
+        assertEq(isIndexed, ans.verified && uint256(agreed) * 2 > panel);
+    }
+
+    /// Launch rule: the constructor calls no other contract, so it deploys on an empty chain, and
+    /// `ask` approves Intake for exactly the price, leaving no allowance or balance behind.
+    function test_constructorMakesNoCallsAndAskLeavesNoAllowance() public {
+        address noCode = makeAddr("noCode");
+        vm.record();
+        AskSwarmRegistry fresh = new AskSwarmRegistry(noCode, noCode, noCode);
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(noCode);
+        assertEq(reads.length + writes.length, 0);
+        assertEq(address(fresh.INTAKE()), noCode);
+
+        assertEq(MockERC20Like(IMD).allowance(address(reg), INTAKE), 0, "no standing approval");
+        _ask();
+        assertEq(MockERC20Like(IMD).allowance(address(reg), INTAKE), 0, "Intake consumed exactly the approval");
+        assertEq(IERC20Like(IMD).balanceOf(address(reg)), 0, "registry holds nothing");
+    }
+
+    /// Only the plane's writer can complete, and each request is answered once.
+    function test_failureHookStatusesAndUnknownIds() public {
+        bytes32 id = _ask();
+        vm.prank(IIntake(INTAKE).writer());
+        IIntake(INTAKE)
+            .complete(
+                id,
+                1,
+                bytes32(0),
+                "",
+                abi.encode(id, uint8(1), bytes32("body_invalid"), uint16(0), uint16(0), bytes(""))
+            );
+        (AskSwarmRegistry.Ask memory k,) = reg.get(id);
+        assertEq(uint8(k.status), uint8(AskSwarmRegistry.Status.Refused));
+
+        bytes32 unknown = keccak256("not asked here");
+        vm.startPrank(INTAKE);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.UnknownAsk.selector, unknown));
+        reg.onFailure(unknown, 2, 0, 0, 0, "");
+        OracleAttestation memory a = _mint(unknown, 0x1234, hex"01", 0, 11);
+        vm.expectRevert(abi.encodeWithSelector(AskSwarmRegistry.UnknownAsk.selector, unknown));
+        reg.onOracleResult(unknown, a, "");
+        vm.stopPrank();
+    }
+
     // ---- helpers ----
 
     function _ask() internal returns (bytes32 id) {
@@ -324,11 +459,16 @@ contract AskSwarmRegistryTest is Test {
         return _mintP(id, qh, answer, t, 15, 11, agreed, uint64(block.timestamp + 1 days));
     }
 
-    function _mintP(bytes32 id, uint256 qh, bytes memory answer, uint8 t, uint16 panel, uint16 quorum, uint16 agreed, uint64 expiresAt)
-        internal
-        view
-        returns (OracleAttestation memory a)
-    {
+    function _mintP(
+        bytes32 id,
+        uint256 qh,
+        bytes memory answer,
+        uint8 t,
+        uint16 panel,
+        uint16 quorum,
+        uint16 agreed,
+        uint64 expiresAt
+    ) internal view returns (OracleAttestation memory a) {
         a = OracleAttestation({
             requestId: id,
             chainId: block.chainid,
@@ -382,6 +522,10 @@ contract Harness is AskSwarmRegistry {
     function digestUnder(OracleAttestation calldata a, address vc) external view returns (bytes32) {
         return _digestUnder(a, _domain(vc));
     }
+}
+
+interface MockERC20Like {
+    function allowance(address, address) external view returns (uint256);
 }
 
 interface IERC20Like {

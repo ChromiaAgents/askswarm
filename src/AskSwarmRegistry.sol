@@ -23,9 +23,10 @@ import {IIntake, OracleAttestation} from "./IIntake.sol";
 ///   EIP-712 digest the plane publishes off chain, so an off-chain reader can re-derive it.
 ///   Verified proves the swarm signed this answer for this contract; the pairing of an answer with
 ///   the ask that bought it is the writer's, as it is for every Intake consumer.
-/// - `latestFor[questionHash]` only moves to an answer at least as strong as the one it holds
+/// - `latestFor[questionHash]` only indexes an answer a strict majority of its own panel agreed on
+///   (`agreed * 2 > panelSize`), and only moves to one at least as strong as the one it holds
 ///   (panel size and agreement), unless the held one has expired. A weak panel cannot overwrite
-///   a strong one; replacing a strong answer costs a stronger panel.
+///   a strong one, and a large panel's minority plurality cannot either.
 ///
 /// Lifecycle: this registry is pinned to Intake v2, the oracle.request action (version oracle-1), and one
 /// attester key. If IMD retires the action (`setPrice` to 0) or rotates the attester, `ask` stops
@@ -63,7 +64,7 @@ contract AskSwarmRegistry {
         uint16 agreed;
         uint64 issuedAt;
         uint64 expiresAt;
-        bool verified; // signature recovered to SIGNER and agreed >= quorum; expiry is the reader's check
+        bool verified; // signature recovered to SIGNER, agreed >= quorum, and not expired at delivery
     }
 
     /// @notice Read form.
@@ -143,8 +144,8 @@ contract AskSwarmRegistry {
         // The plane signs for the callback's contract: domain verifyingContract is this address
         // (imd.fun/docs "with no consumer in the body, the answer is signed for the callback's contract").
         DOMAIN_SEPARATOR = _domain(address(this));
-        // One approval for the contract's life: Intake pulls exactly the price per request.
-        _call(imd, abi.encodeWithSelector(0x095ea7b3, intake, type(uint256).max));
+        // No external call here: the launch runs constructors on an empty chain. `ask` approves
+        // Intake for exactly the price it forwards.
     }
 
     // ---- ask ----
@@ -161,6 +162,8 @@ contract AskSwarmRegistry {
         uint256 p = price();
         if (p == 0) revert NotSold();
         _call(IMD, abi.encodeWithSelector(0x23b872dd, msg.sender, address(this), p));
+        // Intake pulls exactly `p`, so the allowance is back to zero after the request.
+        _call(IMD, abi.encodeWithSelector(0x095ea7b3, address(INTAKE), p));
         requestId = INTAKE.requestWithFailure(
             ACTION, body, IIntake.Callback(address(this), this.onOracleResult.selector), this.onFailure.selector, IMD, p
         );
@@ -181,13 +184,25 @@ contract AskSwarmRegistry {
         if (k.asker == address(0)) revert UnknownAsk(requestId);
         if (a.answer.length > MAX_ANSWER_BYTES) {
             k.status = Status.Unverified;
-            emit Answered(requestId, a.questionHash, a.answerType, "", a.figure, a.agreed, a.quorum, a.panelSize, a.expiresAt, false);
+            emit Answered(
+                requestId,
+                a.questionHash,
+                a.answerType,
+                "",
+                a.figure,
+                a.agreed,
+                a.quorum,
+                a.panelSize,
+                a.expiresAt,
+                false
+            );
             return;
         }
         // Verified: the attester signed this exact attestation for this contract (nonzero recovery),
-        // and the panel's own agreement met quorum (docs: agreed < quorum only when a rerun decided).
+        // the panel's own agreement met quorum (docs: agreed < quorum only when a rerun decided),
+        // and the attestation had not expired when it arrived.
         address rec = _recover(_digest(a), signature);
-        bool ok = rec != address(0) && rec == SIGNER && a.agreed >= a.quorum;
+        bool ok = rec != address(0) && rec == SIGNER && a.agreed >= a.quorum && block.timestamp <= a.expiresAt;
         k.status = ok ? Status.Answered : Status.Unverified;
         bool long = a.answer.length > 32;
         _answers[requestId] = Stored({
@@ -203,21 +218,40 @@ contract AskSwarmRegistry {
             expiresAt: a.expiresAt,
             verified: ok
         });
-        // Index only verified, unexpired answers, and never let a weaker panel displace a stronger
-        // one that is still current. Strength = panel size and agreement, both at least as large.
-        if (ok && block.timestamp <= a.expiresAt) {
+        // Index only verified answers a strict majority of their panel agreed on (the asker picks
+        // panelSize and quorum, so quorum alone says nothing), and never let a weaker panel displace
+        // a stronger one that is still current. Strength = panel size and agreement, both at least as large.
+        if (ok && uint256(a.agreed) * 2 > a.panelSize) {
             Stored storage cur = _answers[latestFor[a.questionHash]];
             bool held = cur.verified && block.timestamp <= cur.expiresAt;
-            if (!held || (a.panelSize >= cur.panelSize && a.agreed >= cur.agreed)) latestFor[a.questionHash] = requestId;
+            if (!held || (a.panelSize >= cur.panelSize && a.agreed >= cur.agreed)) {
+                latestFor[a.questionHash] = requestId;
+            }
         }
-        emit Answered(requestId, a.questionHash, a.answerType, a.answer, a.figure, a.agreed, a.quorum, a.panelSize, a.expiresAt, ok);
+        emit Answered(
+            requestId,
+            a.questionHash,
+            a.answerType,
+            a.answer,
+            a.figure,
+            a.agreed,
+            a.quorum,
+            a.panelSize,
+            a.expiresAt,
+            ok
+        );
     }
 
     /// @notice Intake calls this when the plane refused the ask (status 1) or the panel ended
     /// without a result (status 2). `reason` is the plane's short code.
-    function onFailure(bytes32 requestId, uint8 status, bytes32 reason, uint16 agreed, uint16 answeredCount, bytes calldata)
-        external
-    {
+    function onFailure(
+        bytes32 requestId,
+        uint8 status,
+        bytes32 reason,
+        uint16 agreed,
+        uint16 answeredCount,
+        bytes calldata
+    ) external {
         if (msg.sender != address(INTAKE)) revert NotIntake();
         Ask storage k = asks[requestId];
         if (k.asker == address(0)) revert UnknownAsk(requestId);
@@ -316,9 +350,8 @@ contract AskSwarmRegistry {
             a.figure,
             a.fromBlock
         );
-        bytes memory tail = abi.encode(
-            a.toBlock, a.blockHash, a.panelJobId, a.panelSize, a.quorum, a.agreed, a.issuedAt, a.expiresAt
-        );
+        bytes memory tail =
+            abi.encode(a.toBlock, a.blockHash, a.panelJobId, a.panelSize, a.quorum, a.agreed, a.issuedAt, a.expiresAt);
         bytes32 structHash = keccak256(bytes.concat(head, tail));
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }

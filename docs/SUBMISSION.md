@@ -8,17 +8,17 @@ project, cannot be edited afterwards, prize paid to the contract's deployer addr
 
 | criterion | status |
 |---|---|
-| Launched through the IMD protocol during the build period | AskSwarmRegistry ordered as an `evm_contracts` launch (swarm audit, adapt, tests, specialist audits, deploy on Ethereum). Launch id and job link below once live. |
-| v4 hook or custom contract that really uses IMD | AskSwarmRegistry pays Intake v2, receives `onOracleResult`, verifies the attestation onchain, stores it by questionHash. Fork tests, 13 passing. |
-| Dedicated X account | **TODO, needs a human**: create `@AskSwarm` (or nearest free handle), avatar `docs/logo-512.png`, cover `docs/miniapp-640x360.png`, post the three drafts below. |
+| Launched through the IMD protocol during the build period | Done 17 Oct: [launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa), job [64fa31ee](https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852). Swarm audited, adapted (two findings fixed), tested, deployed and verified. |
+| v4 hook or custom contract that really uses IMD | AskSwarmRegistry on Ethereum `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`: pays Intake v2, receives `onOracleResult`, verifies the attestation onchain, stores it by questionHash. |
+| Dedicated X account | Using [@Eval_Engine](https://x.com/Eval_Engine) (Johnson's call). To do: add AskSwarm + bot link to the bio, pin post 1, then posts 2 and 3. |
 | Submitted via IMD Radar | **TODO after launch is live**: form needs project X handle, contract address (mainnet registry), blurb below. |
 
 Prize wallet: the launch's literal deployer is IMD's factory wallet, so name ours in the blurb like
-other entrants do. **Decide which wallet** (not the bot hot wallet). Placeholder `0x…` below.
+other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
 ## Radar blurb (≤1000 chars, fill in the two addresses)
 
-AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. /ask a question: the bot drafts it through /requests/check, shows panel, quorum and a split-risk score from a model trained on 7.8k past IMD requests (evalengine/imd-oracle-outcomes, public on HF), then you pay 160 CHR via Chromia Pay or 0.5 IMD from your own wallet. 6,729 already-attested answers are free. The EIP-712 attestation is verified and posted in chat. AskSwarmRegistry (Ethereum, launched through IMD, swarm-audited, no owner): ask(body) pulls 0.5 IMD, calls Intake v2 with itself as callback, verifies the attester's signature in its own domain, requires agreed ≥ quorum, and stores every answer by questionHash with a stronger-panel-wins rule, so any contract can read what the swarm attested. Refusals and split panels are recorded too. Registry: 0x… Code: github.com/ChromiaAgents/askswarm + askswarm-registry. Bot: t.me/askswarm_bot. Prize wallet: 0x…
+AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. /ask a question: the bot drafts it through /requests/check, shows panel, quorum and a split-risk score from a model trained on 7.8k past IMD requests (evalengine/imd-oracle-outcomes, public on HF), then you pay 160 CHR via Chromia Pay or 0.5 IMD from your own wallet. 6,729 already-attested answers are free. The EIP-712 attestation is verified and posted in chat. AskSwarmRegistry (Ethereum, launched through IMD, swarm-audited, no owner): ask(body) pulls 0.5 IMD, calls Intake v2 with itself as callback, verifies the attester's signature in its own domain, requires agreed ≥ quorum, and stores every answer by questionHash with a stronger-panel-wins rule, so any contract can read what the swarm attested. Refusals and split panels are recorded too. Registry: 0x3fc72adfed89284e4f3f378646a5338f2f1e14ea (IMD launch #2088). Code: github.com/ChromiaAgents/askswarm + askswarm-registry. Bot: t.me/askswarm_bot. Prize wallet: 0x…
 
 ## X posts
 
@@ -32,7 +32,7 @@ Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 
 ## Evidence to link in the entry
 
-- Mainnet registry address + Etherscan, the IMD launch page (explorer.imd.fun/launches/…) and job.
+- Registry https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea, launch https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa, job https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852.
 - At least 10 real mainnet asks through the registry with tx hashes (run `/examples` in the group with REGISTRY_ADDRESS set; each costs 0.5 IMD from the house wallet).
 - Sepolia end-to-end callback tx (registry `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900`).
 - Dataset card, split-risk README section, recall tier.

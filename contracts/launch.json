@@ -1,0 +1,14 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {
+      "contract": "AskSwarmRegistry",
+      "constructorArgs": [
+        "0xa43e6f75ee006411f79ac1c84120606c2330de82",
+        "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+        "0x5598aa9146215bc13eb26f2c692ad1461fd32982"
+      ]
+    }
+  ],
+  "notes": "Deploy the accepted AskSwarmRegistry on Ethereum mainnet with constructor arguments intake, imd, signer in that order. These addresses are immutable; there is no owner, admin, upgrade path, ETH funding or initialization call. Each ask pulls Intake's current price in IMD, approves exactly that amount and forwards it through requestWithFailure with the registry as callback. Only Intake can deliver results or failure statuses. Answers are verified against the configured signer using the IdentityMD Oracle version 2 EIP-712 domain for this chain and registry, with quorum and delivery-time expiry checks. Verified strict-majority answers are indexed by questionHash subject to the accepted panel-strength rule; answers of 33 to 4096 bytes are stored by hash and emitted in full. Request pairing and single delivery rely on Intake and its writer. Readers must check answer expiry and panel strength."
+}
