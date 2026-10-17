@@ -22,7 +22,7 @@ sequenceDiagram
     U->>B: /ask Did Argentina win the 2022 World Cup?
     B->>S: POST /requests/check (free)
     S-->>B: normalized question, answerType, panel 15 / quorum 11
-    B-->>U: ❓ status card  [Ask free (Sepolia)] [Pay 2 CHR]
+    B-->>U: ❓ status card  [Ask free (Sepolia)] [Pay 160 CHR]
     alt Pay in CHR
         B->>P: payments.create(amount, metadata{chatId,msgId,question})
         P-->>U: hosted checkout, pay from own wallet
