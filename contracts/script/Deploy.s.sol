@@ -12,7 +12,7 @@ contract Deploy is Script {
 
     function run() external {
         address imd = block.chainid == 11155111
-            ? 0x44A1Cd38474Fb1748400E7deb5F8d786CCe3F89A
+            ? 0x44a1Cd38474FB1748400E7DEb5F8D786ccE3F89A
             : 0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7;
         vm.startBroadcast();
         AskSwarmRegistry r = new AskSwarmRegistry(INTAKE, imd, ORACLE_SIGNER);

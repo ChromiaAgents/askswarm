@@ -16,6 +16,7 @@ contract AskSwarmRegistryTest is Test {
     address user = makeAddr("user");
     AskSwarmRegistry reg; // signer = test key, so we can mint attestations
     AskSwarmRegistry regReal; // signer = real oracle key, for the compatibility check
+    Harness harness;
 
     bytes constant BODY =
         '{"v":1,"question":"What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only.","chainId":1,"window":{"hours":24},"answerType":"bytes32","evidence":"panel","panelSize":15,"quorum":11,"validForSeconds":86400}';
@@ -23,6 +24,7 @@ contract AskSwarmRegistryTest is Test {
     function setUp() public {
         reg = new AskSwarmRegistry(INTAKE, IMD, vm.addr(TEST_PK));
         regReal = new AskSwarmRegistry(INTAKE, IMD, ORACLE_SIGNER);
+        harness = new Harness(INTAKE, IMD, ORACLE_SIGNER);
         deal(IMD, user, 10 ether);
     }
 
@@ -52,7 +54,8 @@ contract AskSwarmRegistryTest is Test {
 
     function test_digestMatchesPlaneSignature() public view {
         (OracleAttestation memory a, bytes memory sig) = realAttestation();
-        bytes32 d = regReal.digest(a);
+        // a9a6d603 was asked without a callback, so the plane signed it under verifyingContract 0.
+        bytes32 d = harness.digestUnder(a, address(0));
         (bytes32 r, bytes32 s, uint8 v) = _split(sig);
         assertEq(ecrecover(d, v, r, s), ORACLE_SIGNER, "digest does not recover the oracle signer");
     }
@@ -67,7 +70,7 @@ contract AskSwarmRegistryTest is Test {
         (address payer, address target, bytes4 sel, bool completed) = IIntake(INTAKE).requests(id);
         assertEq(payer, address(reg));
         assertEq(target, address(reg));
-        assertEq(sel, reg.onAnswer.selector);
+        assertEq(sel, reg.onOracleResult.selector);
         assertFalse(completed);
         (AskSwarmRegistry.Ask memory k,) = reg.get(id);
         assertEq(k.asker, user);
@@ -127,7 +130,7 @@ contract AskSwarmRegistryTest is Test {
         bytes32 id = _ask();
         OracleAttestation memory a = _mint(id, 0x3333, hex"01", 0, 9);
         vm.expectRevert(AskSwarmRegistry.NotIntake.selector);
-        reg.onAnswer(id, a, "");
+        reg.onOracleResult(id, a, "");
         vm.expectRevert(AskSwarmRegistry.NotIntake.selector);
         reg.onFailure(id, 2, 0, 0, 0, "");
     }
@@ -150,6 +153,28 @@ contract AskSwarmRegistryTest is Test {
         assertEq(ans.agreed, 11);
     }
 
+    function test_domainIsTheCallbackContract() public {
+        bytes32 id = _ask();
+        OracleAttestation memory a = _mint(id, 0x6666, hex"01", 0, 11);
+        // Signed for verifyingContract 0 instead of the registry: must not verify.
+        (uint8 v, bytes32 r, bytes32 s2) = vm.sign(TEST_PK, harness.digestUnder(a, address(0)));
+        vm.prank(INTAKE);
+        reg.onOracleResult(id, a, abi.encodePacked(r, s2, v));
+        (, AskSwarmRegistry.Answer memory ans) = reg.get(id);
+        assertFalse(ans.verified, "wrong domain must not verify");
+    }
+
+    function test_quorumAndExpiryGateVerified() public {
+        bytes32 id = _ask();
+        OracleAttestation memory a = _mint(id, 0x7777, hex"01", 0, 10); // agreed 10 < quorum 11
+        bytes memory sig = _sign(reg, a);
+        vm.prank(INTAKE);
+        reg.onOracleResult(id, a, sig);
+        (, AskSwarmRegistry.Answer memory ans) = reg.get(id);
+        assertFalse(ans.verified, "agreed below quorum is not canonical");
+        assertEq(ans.agreed, 10, "but is recorded");
+    }
+
     /// Direct measurement of the callback's gas, both the common case and the worst case, so the
     /// margin under Intake's 200k stipend is a number in the test output, not a guess.
     function test_callbackGasMargin() public {
@@ -158,7 +183,7 @@ contract AskSwarmRegistryTest is Test {
         bytes memory sig = _sign(reg, a);
         vm.prank(INTAKE);
         uint256 g0 = gasleft();
-        reg.onAnswer(id, a, sig);
+        reg.onOracleResult(id, a, sig);
         uint256 used = g0 - gasleft();
         emit log_named_uint("onAnswer gas, bytes32 answer", used);
         assertLt(used, 150_000, "need >=50k margin under the 200k stipend");
@@ -169,7 +194,7 @@ contract AskSwarmRegistryTest is Test {
         bytes memory sig2 = _sign(reg, b);
         vm.prank(INTAKE);
         g0 = gasleft();
-        reg.onAnswer(id2, b, sig2);
+        reg.onOracleResult(id2, b, sig2);
         used = g0 - gasleft();
         emit log_named_uint("onAnswer gas, 352-byte answer", used);
         assertLt(used, 150_000);
@@ -232,6 +257,15 @@ contract AskSwarmRegistryTest is Test {
             }
         }
         revert("no Completed event");
+    }
+}
+
+/// Exposes the digest under an arbitrary verifyingContract, to check hashing against a published attestation.
+contract Harness is AskSwarmRegistry {
+    constructor(address i, address m, address s) AskSwarmRegistry(i, m, s) {}
+
+    function digestUnder(OracleAttestation calldata a, address vc) external view returns (bytes32) {
+        return _digestUnder(a, _domain(vc));
     }
 }
 

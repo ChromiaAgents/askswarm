@@ -112,11 +112,9 @@ contract AskSwarmRegistry {
         INTAKE = IIntake(intake);
         IMD = imd;
         SIGNER = signer;
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                EIP712_DOMAIN_TYPEHASH, keccak256("IdentityMD Oracle"), keccak256("2"), block.chainid, address(0)
-            )
-        );
+        // The plane signs for the callback's contract: domain verifyingContract is this address
+        // (imd.fun/docs "with no consumer in the body, the answer is signed for the callback's contract").
+        DOMAIN_SEPARATOR = _domain(address(this));
         // One approval for the contract's life: Intake pulls exactly the price per request.
         _call(imd, abi.encodeWithSelector(0x095ea7b3, intake, type(uint256).max));
     }
@@ -136,7 +134,7 @@ contract AskSwarmRegistry {
         if (p == 0) revert NotSold();
         _call(IMD, abi.encodeWithSelector(0x23b872dd, msg.sender, address(this), p));
         requestId = INTAKE.requestWithFailure(
-            ACTION, body, IIntake.Callback(address(this), this.onAnswer.selector), this.onFailure.selector, IMD, p
+            ACTION, body, IIntake.Callback(address(this), this.onOracleResult.selector), this.onFailure.selector, IMD, p
         );
         asks[requestId] = Ask({asker: msg.sender, askedAt: uint64(block.timestamp), status: Status.Pending});
         asked++;
@@ -146,12 +144,16 @@ contract AskSwarmRegistry {
     // ---- the swarm answers ----
 
     /// @notice Intake calls this with the signed attestation when the panel reached quorum.
+    /// Selector 0x510379c7, the docs' `onOracleResult`; Intake calls whatever selector `ask` registered.
     /// Runs inside Intake's fixed 200k gas stipend: three fresh storage slots plus one ecrecover.
-    function onAnswer(bytes32 requestId, OracleAttestation calldata a, bytes calldata signature) external {
+    function onOracleResult(bytes32 requestId, OracleAttestation calldata a, bytes calldata signature) external {
         if (msg.sender != address(INTAKE)) revert NotIntake();
         Ask storage k = asks[requestId];
         if (k.asker == address(0)) revert UnknownAsk(requestId);
-        bool ok = _recover(_digest(a), signature) == SIGNER && a.requestId == requestId;
+        // Verified means: the plane's key signed this exact attestation for this contract, the panel's
+        // own agreement met quorum (docs: agreed < quorum only when a deployer rerun decided), and it
+        // is not already expired. Anything else is stored for the record but never becomes canonical.
+        bool ok = a.agreed >= a.quorum && block.timestamp <= a.expiresAt && _recover(_digest(a), signature) == SIGNER;
         k.status = Status.Answered;
         bool long = a.answer.length > 32;
         bytes32 a32 = long ? keccak256(a.answer) : _left32(a.answer);
@@ -230,7 +232,19 @@ contract AskSwarmRegistry {
 
     // ---- internals ----
 
+    function _domain(address verifyingContract) internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH, keccak256("IdentityMD Oracle"), keccak256("2"), block.chainid, verifyingContract
+            )
+        );
+    }
+
     function _digest(OracleAttestation calldata a) internal view returns (bytes32) {
+        return _digestUnder(a, DOMAIN_SEPARATOR);
+    }
+
+    function _digestUnder(OracleAttestation calldata a, bytes32 domainSeparator) internal pure returns (bytes32) {
         // abi.encode of all 16 words, built in two halves to stay within the EVM stack. The bytes are
         // identical to a single abi.encode(...) since every field is a static 32-byte word.
         bytes memory head = abi.encode(
@@ -247,7 +261,7 @@ contract AskSwarmRegistry {
             a.toBlock, a.blockHash, a.panelJobId, a.panelSize, a.quorum, a.agreed, a.issuedAt, a.expiresAt
         );
         bytes32 structHash = keccak256(bytes.concat(head, tail));
-        return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 
     function _recover(bytes32 h, bytes calldata sig) internal pure returns (address) {
