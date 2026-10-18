@@ -36,7 +36,7 @@ Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 - Explorer https://askswarm-nine.vercel.app/answers, agent docs https://askswarm-nine.vercel.app/skill.md.
 - At least 10 real mainnet asks through the registry with tx hashes (run `/examples` in the group with REGISTRY_ADDRESS set; each costs 0.5 IMD from the house wallet).
 - docs/EVIDENCE.md: 10 asks through #2088, all with tx and attestation links.
-- Dataset card, split-risk README section, recall tier.
+- Dataset card, split-risk README section, recall tier, and the write-back: https://huggingface.co/datasets/evalengine/imd-oracle-outcomes/blob/main/contrib/askswarm/answers.jsonl (daily cron).
 
 ## Before 21 Oct
 

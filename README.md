@@ -235,7 +235,7 @@ The split-risk model reads `evalengine/imd-oracle-outcomes`; the registry writes
 cron (`api/hf-sync`, or `bun scripts/hf-sync.ts`) pushes every terminal registry answer to
 `contrib/askswarm/answers.jsonl` in that dataset: question, body, decoded answer, panel, agreement,
 onchain verification, txs, with `label` in the dataset's own 0 attested / 1 disagreed convention.
-Needs `HF_TOKEN` with write access; without it the job is a no-op.
+Live: [contrib/askswarm/answers.jsonl](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes/blob/main/contrib/askswarm/answers.jsonl).
 
 ## Pricing
 
