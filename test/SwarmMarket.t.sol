@@ -5,13 +5,15 @@ import {Test} from "forge-std/Test.sol";
 import {AskSwarmRegistry} from "../src/AskSwarmRegistry.sol";
 import {IIntake, OracleAttestation} from "../src/IIntake.sol";
 import {SwarmMarket} from "../src/SwarmMarket.sol";
+import {MockIntake, MockERC20} from "./mocks/IntakeMocks.sol";
 
 interface IERC20M {
     function approve(address, uint256) external returns (bool);
     function balanceOf(address) external view returns (uint256);
 }
 
-/// Mainnet fork: real Intake v2 and IMD, a fresh registry signed by a test key, writer impersonated.
+/// Offline by default; on a mainnet fork uses real Intake v2 and IMD, a fresh registry signed by
+/// a test key, and the impersonated writer. Uses the same offline transport as the registry tests.
 /// `forge test --fork-url $ETH_RPC_URL --match-path test/SwarmMarket.t.sol`
 contract SwarmMarketTest is Test {
     address constant INTAKE = 0xa43e6F75ee006411F79Ac1C84120606C2330DE82;
@@ -29,6 +31,13 @@ contract SwarmMarketTest is Test {
         '{"v":1,"question":"Did Argentina win the 2022 FIFA World Cup?","chainId":1,"window":{"hours":24},"answerType":"bool","evidence":"panel","panelSize":15,"quorum":11,"validForSeconds":86400}';
 
     function setUp() public {
+        if (INTAKE.code.length == 0) {
+            vm.chainId(1);
+            vm.roll(26_300_000);
+            vm.warp(1_792_300_000);
+            vm.etch(IMD, address(new MockERC20()).code);
+            vm.etch(INTAKE, address(new MockIntake(makeAddr("writer"), IMD)).code);
+        }
         reg = new AskSwarmRegistry(INTAKE, IMD, vm.addr(PK));
         mkt = new SwarmMarket(address(reg), IMD, treasury);
         address[4] memory us = [creator, y1, y2, n1];
@@ -55,7 +64,8 @@ contract SwarmMarketTest is Test {
     }
 
     function _resolve(uint256 id) internal returns (bytes32 rid) {
-        vm.warp(block.timestamp + 2 hours);
+        (SwarmMarket.Market memory beforeResolve,) = mkt.get(id);
+        vm.warp(beforeResolve.resolveAfter);
         mkt.resolve(id);
         (SwarmMarket.Market memory m,) = mkt.get(id);
         rid = m.requestId;
@@ -86,7 +96,14 @@ contract SwarmMarketTest is Test {
 
     function _fail(bytes32 rid) internal {
         vm.prank(IIntake(INTAKE).writer());
-        IIntake(INTAKE).complete(rid, 2, bytes32(0), "", abi.encode(rid, uint8(2), bytes32("disagreed"), uint16(10), uint16(14), bytes("")));
+        IIntake(INTAKE)
+            .complete(
+                rid,
+                2,
+                bytes32(0),
+                "",
+                abi.encode(rid, uint8(2), bytes32("disagreed"), uint16(10), uint16(14), bytes(""))
+            );
     }
 
     function test_yesWinsProRataWithFee() public {
@@ -224,10 +241,11 @@ contract SwarmMarketTest is Test {
 
     function test_abandon() public {
         uint256 id = _openAndStake();
-        vm.warp(block.timestamp + 2 hours + 3 days);
+        (SwarmMarket.Market memory m,) = mkt.get(id);
+        vm.warp(uint256(m.resolveAfter) + mkt.RESOLVE_WINDOW());
         vm.expectRevert(SwarmMarket.TooEarly.selector);
         mkt.abandon(id);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         mkt.abandon(id);
         assertEq(_bal(creator), 1000 ether, "fee escrow back");
         vm.prank(y2);

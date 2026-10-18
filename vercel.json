@@ -6,6 +6,10 @@
     {
       "path": "/api/hf-sync",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/keeper",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
