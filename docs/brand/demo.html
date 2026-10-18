@@ -58,6 +58,15 @@
   .end{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
   .end p{font-size:34px;margin-top:24px;line-height:1.5}
   .end .mono{font:26px/1.8 "NBM",monospace}
+  .mk{position:absolute;left:820px;top:170px;width:960px;background:#fff;border:4px solid var(--ink);border-radius:28px;padding:34px 38px;box-shadow:14px 14px 0 var(--ink)}
+  .mq{font-weight:700;font-size:34px;line-height:1.25;margin:18px 0}
+  .mbar{display:flex;height:64px;border:3px solid var(--ink);border-radius:999px;overflow:hidden;font:700 24px/58px "NB",sans-serif}
+  .mbar .my{background:var(--green);padding-left:22px;white-space:nowrap}
+  .mbar .mn{background:var(--pink);flex:1;text-align:right;padding-right:22px;white-space:nowrap}
+  .mm{font:22px/1.6 "NBM",monospace;color:#5a5260;margin-top:14px}
+  .mfeed{font:22px/1.7 "NBM",monospace;margin-top:12px;min-height:150px}
+  .mres{display:none;margin-top:18px;background:var(--green);border:3px solid var(--ink);border-radius:20px;padding:18px 22px;font-weight:700;font-size:28px}
+  .mres span{font-weight:400;font-size:22px}
 </style>
 </head>
 <body>
@@ -108,12 +117,30 @@
     <div class="shot"><img id="shot" src="file:///private/tmp/claude-501/-Users-liho-Desktop-chromia/9a6217e9-c258-4431-b4fb-3f70fe3ab90a/scratchpad/answers-light.png"></div>
   </div>
 
+
+  <!-- S5 markets 29-36 -->
+  <div class="scene" id="s5">
+    <div style="position:absolute;left:150px;top:140px;width:600px">
+      <span class="tag">swarmmarket · /bet</span>
+      <h2 style="font:900 92px/1 'Battlefin';margin:22px 0">Bet on it. The <span style="color:var(--purple-s)">swarm</span> settles.</h2>
+      <p style="font-size:30px;line-height:1.35">Anyone stakes IMD on Yes or No. The registry's verified answer pays the winners. 2% of the losing side: half to the market's creator, half funds free asks.</p>
+    </div>
+    <div class="mk">
+      <span class="tag" id="mkstate" style="background:var(--yellow);color:var(--ink)">open</span>
+      <p class="mq">Did Argentina win the 2022 FIFA World Cup?</p>
+      <div class="mbar"><div class="my" id="my">YES 50%</div><div class="mn" id="mn">50% NO</div></div>
+      <p class="mm" id="mm">Yes pool 0 IMD · No pool 0 IMD · 0 traders</p>
+      <div class="mfeed" id="feed"></div>
+      <div class="mres" id="mres">✅ Resolved YES · swarm 12/15 agreed · verified onchain<br><span>winners split 98% of the No pool · 2% fee</span></div>
+    </div>
+  </div>
+
   <!-- S3 flywheel 29-35 -->
   <div class="scene" id="s3">
     <div style="position:absolute;left:150px;top:140px;width:560px">
       <span class="tag">launched through IMD</span>
       <h2 style="font:900 92px/1 'Battlefin';margin:22px 0">The <span style="color:var(--purple-s)">loop</span></h2>
-      <p style="font-size:30px;line-height:1.35">The registry was audited, fixed and deployed by the swarm itself (launches #2088 and #2099). Every answer flows back into the dataset the risk model learns from.</p>
+      <p style="font-size:30px;line-height:1.35">Registry, markets and wagers were all audited and deployed by the swarm itself, through IMD launches. Every answer flows back into the dataset the risk model learns from.</p>
     </div>
     <div class="wheel">
       <div class="node in0" style="left:0;top:0;background:var(--purple)">Eval Engine dataset<small>7,804 past IMD requests</small></div>
@@ -133,7 +160,7 @@
       <div>
         <img src="../logo.svg" width="160" height="160" style="border-radius:40px;box-shadow:10px 10px 0 var(--ink)">
         <h2 style="font:900 110px/1 'Battlefin';margin-top:30px">Ask the <span style="color:var(--purple-s)">Swarm</span></h2>
-        <p class="mono">t.me/askswarm_bot<br>askswarm-nine.vercel.app/answers<br>github.com/ChromiaAgents/askswarm<br>registry 0x53e1e2f3…b111cd · IMD launch #2099</p>
+        <p class="mono">t.me/askswarm_bot · /ask · /bet<br>askswarm-nine.vercel.app/answers · /market<br>github.com/ChromiaAgents/askswarm<br>3 contracts launched through IMD</p>
         <p>Chromia × Eval Engine × IMD</p>
       </div>
     </div>
@@ -143,7 +170,7 @@
   // Deterministic frame: ?t=<seconds>. The renderer screenshots this page once per frame.
   const t = Number(new URLSearchParams(location.search).get("t") ?? 0);
   const on = (id, a, b) => { const el = document.getElementById(id); if (t >= a && t < b) el.classList.add("on"); };
-  on("s0", 0, 3.5); on("s1", 3.5, 21); on("s2", 21, 29); on("s3", 29, 35); on("s4", 35, 41);
+  on("s0", 0, 3.5); on("s1", 3.5, 21); on("s2", 21, 29); on("s5", 29, 36); on("s3", 36, 42); on("s4", 42, 48);
   document.querySelectorAll("[data-at]").forEach((el) => { if (t >= Number(el.dataset.at)) el.classList.add("in"); });
   // captions: only the latest step is visible
   const steps = [...document.querySelectorAll(".cap .step")].filter((e) => t >= Number(e.dataset.at));
@@ -152,10 +179,22 @@
   if (t >= 13.2) document.getElementById("card2").style.display = "none";
   if (t >= 16.5) document.getElementById("card3").style.display = "none";
   if (t >= 12.2 && t < 13.2) document.getElementById("tap").style.outline = "4px solid #fff";
+  // market: bets arrive, odds move, then the swarm settles it
+  if (t >= 29 && t < 36) {
+    const bets = [[29.8,"0x7a1c… YES 40 IMD",1,40],[30.6,"0x22f9… NO 25 IMD",0,25],[31.3,"0xb40e… YES 15 IMD",1,15],[32.0,"0x91d3… NO 20 IMD",0,20],[32.6,"0x5e08… YES 30 IMD",1,30]];
+    let y = 0, n = 0, k = 0; const feed = [];
+    for (const b of bets) if (t >= b[0]) { b[2] ? (y += b[3]) : (n += b[3]); k++; feed.push((b[2] ? "▲ " : "▼ ") + b[1]); }
+    const p = y + n ? Math.round(y * 100 / (y + n)) : 50;
+    document.getElementById("my").style.width = Math.max(p, 14) + "%"; document.getElementById("my").textContent = "YES " + p + "%"; document.getElementById("mn").textContent = (100 - p) + "% NO";
+    document.getElementById("mm").textContent = `Yes pool ${y} IMD · No pool ${n} IMD · ${k} traders`;
+    document.getElementById("feed").innerHTML = feed.slice(-4).join("<br>");
+    if (t >= 33.6) { const st = document.getElementById("mkstate"); st.textContent = "swarm answering…"; }
+    if (t >= 34.4) { document.getElementById("mres").style.display = "block"; const st = document.getElementById("mkstate"); st.textContent = "resolved YES"; st.style.background = "var(--green)"; }
+  }
   // explorer scroll
   if (t >= 21 && t < 29) { const p = Math.min(1, Math.max(0, (t - 22) / 6)); document.getElementById("shot").style.transform = `translateY(${-p * 900}px)`; }
   // flywheel build-up
-  ["in0","a0","in1","a1","in2","a2","in3","a3"].forEach((c, i) => { if (t >= 29.6 + i * 0.45) document.querySelector("." + c).classList.add("in"); });
+  ["in0","a0","in1","a1","in2","a2","in3","a3"].forEach((c, i) => { if (t >= 36.6 + i * 0.45) document.querySelector("." + c).classList.add("in"); });
 </script>
 </body>
 </html>

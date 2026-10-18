@@ -18,7 +18,7 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 
 Built by Chromia × EVAL Engine for the Identity MD hackathon, October 2026. Bot: [t.me/askswarm_bot](https://t.me/askswarm_bot).
 
-**Demo (40 s):** [docs/askswarm-demo.mp4](docs/askswarm-demo.mp4)
+**Demo (48 s):** [docs/askswarm-demo.mp4](docs/askswarm-demo.mp4)
 
 ## How it works
 
