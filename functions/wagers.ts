@@ -51,9 +51,14 @@ export async function GET(req: Request) {
     const q = draft.replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 500);
     if (!q) return json({ error: "empty" }, 400);
     const chk = await imd.check(q, Number(process.env.IMD_PANEL_SIZE ?? 15));
-    if (chk.blockers?.length || !chk.request) return json({ error: "blocked", blockers: chk.blockers }, 409);
+    // A bet is about something that has not happened yet, so the swarm's precheck says
+    // not_answerable today. That is the only blocker we accept: the swarm is asked after the
+    // deadline, and if it still refuses then, the contract refunds everyone.
+    const blockers = chk.blockers ?? [];
+    const futureOnly = blockers.length > 0 && blockers.every((b) => b.code === "not_answerable");
+    if (!chk.request || (blockers.length && !futureOnly)) return json({ error: "blocked", blockers }, 409);
     if (chk.request.answerType !== "bool") return json({ error: "not_yes_no", answerType: chk.request.answerType }, 409);
-    return json({ request: chk.request, wager: WAGER, registry: process.env.REGISTRY_ADDRESS, imd: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" });
+    return json({ request: chk.request, future: futureOnly, wager: WAGER, registry: process.env.REGISTRY_ADDRESS, imd: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" });
   }
   try { return json({ wager: WAGER, rows: await rows() }); }
   catch (e: any) { return json({ error: String(e?.message ?? e) }, 502); }

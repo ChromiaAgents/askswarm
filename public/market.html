@@ -142,7 +142,7 @@
     const r = await fetch("/api/wagers?draft=" + encodeURIComponent(q)).then((r) => r.json());
     if (r.error === "not_yes_no") return ($("#draft").textContent = `The swarm reads this as a ${r.answerType} question. Rephrase as yes/no.`);
     if (r.error) return ($("#draft").textContent = "The swarm won't take this: " + (r.blockers || []).map((b) => b.detail).join(" "));
-    draft = r.request; $("#draft").textContent = `✓ yes/no · panel ${draft.panelSize}, quorum ${draft.quorum}`; $("#openBtn").disabled = !M;
+    draft = r.request; $("#draft").textContent = `✓ yes/no · panel ${draft.panelSize}, quorum ${draft.quorum}` + (r.future ? " · answerable only after the deadline; if the swarm refuses then, everyone is refunded" : ""); $("#openBtn").disabled = !M;
   }
   $("#openBtn").onclick = async () => {
     const log = logger($("#olog")); $("#openBtn").disabled = true;
