@@ -13,3 +13,13 @@ Registry #2088 `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea` (the current registr
 | 7 | How many players does each team field in a standard association football match? Answer with the whole number only. | [0xfe9b8d31…](https://etherscan.io/tx/0xfe9b8d319aca41cb4c4caa7e93b74eaf9f61d4fbbc3fea2a08c29d05be96ee09) | [217c642d](https://api.imd.fun/oracle/requests/217c642d-3267-4e6b-85d5-ad89a738201e/attestation) | attested | verified ✅ · `0x91f2abcf…` |
 | 8 | What is the atomic number of gold? Answer with the whole number only. | [0x63577a40…](https://etherscan.io/tx/0x63577a4093e3645cfbe0bc56fde926cf6e61cc3d733928bdc29a1b57eb3cb594) | [44eab9dc](https://api.imd.fun/oracle/requests/44eab9dc-aca0-42e4-b2bf-098c59cbd887/attestation) | attested | verified ✅ · `0xeac0c02b…` |
 | 9 | Did Bitcoin's genesis block get mined in January 2009? | [0x3b28c112…](https://etherscan.io/tx/0x3b28c112577dcfb827bc415f187ef07321d63cb43d3817ca5f86bc60a0eade98) | [a03ae889](https://api.imd.fun/oracle/requests/a03ae889-4a5d-4300-982a-e4bcf59ecf98/attestation) | attested | verified ✅ · `0x7636ca5b…` |
+
+## Contracts built on the registry, live on mainnet
+
+| contract | id | question | outcome | txs |
+|---|---|---|---|---|
+| SwarmWager `0xc0b13031…99bbe6` (launch #2189) | wager 1 | Did Argentina win the 2022 FIFA World Cup? | swarm answered Yes, verified; Yes side paid 2 IMD | [create](https://etherscan.io/tx/0x5cca3d27050d609c85e07eab6cc448bb668cc0f4ac95a1747edc5d42f4412042) · [resolve](https://etherscan.io/tx/0xaf65e50958fb4b0cbaaef1ea5f87289ccd439337ec644f7004e2a27b3f1bcc5f) · [settle](https://etherscan.io/tx/0x02cf1df7a1cef4938a272dfb4e31d787b4df9875babe30804122e96c47707c96) |
+| SwarmMarket `0x4964d5f0…8afa55` (launch #2190) | market 1 | Did Argentina win the 2022 FIFA World Cup? | 2 traders, 1.1 IMD staked; keeper resolved and settled; resolved YES; winner claimed 1.098 IMD; 0.002 IMD fee | [open](https://etherscan.io/tx/0x7e1c50de365e35f811fa550a0baf738c285c950ea8b1e19d1d35475d17d8b5ef) · [claim](https://etherscan.io/tx/0x8b669b23fda263bc72998b78e44d0619c6de3ec74d7baab1cffb6018a0409fce) |
+
+Both were opened between the AskSwarm house wallet and a second test wallet to prove the full loop;
+markets opened by others show up at https://askswarm-nine.vercel.app/market.
