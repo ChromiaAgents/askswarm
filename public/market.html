@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskSwarm · Markets</title>
+<meta name="description" content="Yes/no prediction markets in IMD, settled by the IMD swarm's verified answer onchain.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @font-face{font-family:"Battlefin";src:url(/fonts/Battlefin-Black.otf) format("opentype");font-weight:900}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Regular_Webfont.ttf) format("truetype");font-weight:400}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Bold_Webfont.ttf) format("truetype");font-weight:700}
+  @font-face{font-family:"NB Mono";src:url(/fonts/NB_International_Mono_Webfont.ttf) format("truetype")}
+  :root{--bg:#F5EEEE;--ink:#1F1A23;--card:#fff;--muted:#5a5260;--purple:#CC91F0;--purple-s:#9E5ECF;--pink:#FFB0C2;--pink-s:#FF87A6;--green:#93F091;--green-s:#4FCD4C;--yellow:#FFB500}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1F1A23;--ink:#F5EEEE;--card:#2a2430;--muted:#bdb3c4}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "NB International",Helvetica,Arial,sans-serif;padding:24px 16px 64px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font:900 46px/1 "Battlefin",Georgia,serif;margin:8px 0}
+  h1 span{color:var(--purple-s)}
+  .sub{color:var(--muted);margin:0 0 16px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+  .pill{display:inline-block;border:2px solid var(--ink);border-radius:999px;padding:5px 13px;font-weight:700;background:var(--card);box-shadow:3px 3px 0 var(--ink)}
+  .card{background:var(--card);border:2px solid var(--ink);border-radius:18px;padding:18px;margin:0 0 14px;box-shadow:5px 5px 0 var(--ink)}
+  .q{font-weight:700;font-size:20px;margin:6px 0}
+  .q a{color:inherit;text-decoration:none}
+  .bar{display:flex;height:34px;border:2px solid var(--ink);border-radius:999px;overflow:hidden;margin:10px 0 6px;font-weight:700;font-size:14px}
+  .bar .y{background:var(--green);color:#1F1A23;display:flex;align-items:center;padding-left:12px}
+  .bar .n{background:var(--pink);color:#1F1A23;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;flex:1}
+  .meta{font:13px/1.6 "NB Mono",monospace;color:var(--muted)}
+  a{color:var(--purple-s)}
+  .tag{display:inline-block;border:2px solid #1F1A23;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700;background:var(--yellow);color:#1F1A23}
+  .tag.yes{background:var(--green)}.tag.no{background:var(--pink)}.tag.void{background:#ddd}
+  label{display:block;font-weight:700;margin:12px 0 6px}
+  input,select{width:100%;font:inherit;padding:11px 13px;border:2px solid var(--ink);border-radius:12px;background:var(--card);color:var(--ink)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+  button{font:inherit;font-weight:700;border:2px solid var(--ink);border-radius:999px;padding:12px 18px;background:var(--purple);color:#1F1A23;cursor:pointer;box-shadow:3px 3px 0 var(--ink)}
+  button.y{background:var(--green)}button.n{background:var(--pink)}
+  button:disabled{opacity:.5;cursor:default;box-shadow:none}
+  .log{font:13px/1.6 "NB Mono",monospace;white-space:pre-wrap;margin-top:10px}
+  .err{color:#c2185b}.ok{color:#2e8b2b}
+  details summary{cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/answers" class="meta">← what the swarm knows</a>
+  <h1>Bet on it. The <span>swarm</span> settles.</h1>
+  <p class="sub">Stake IMD on Yes or No. After the deadline the IMD swarm answers through AskSwarmRegistry, verified onchain, and winners split the losing side. A split panel or no answer refunds everyone. 2% of the losing side goes half to the market's creator, half to fund free asks.</p>
+  <div class="stats" id="stats"></div>
+  <div id="view"></div>
+  <details class="card" id="newbox"><summary>Open a market</summary>
+    <label for="q">Yes/no question</label>
+    <input id="q" placeholder="Will ETH close above $3,000 on 31 Oct 2026 (Coinbase daily close)?">
+    <div class="meta" id="draft"></div>
+    <div class="row">
+      <div><label for="close">Betting closes</label><input id="close" type="datetime-local"></div>
+      <div><label for="after">Ask the swarm after</label><input id="after" type="datetime-local"></div>
+    </div>
+    <div class="meta">You escrow the swarm's fee (0.5 IMD) and earn 1% of the losing side. Word the question so it is answerable from public sources after the second time.</div>
+    <button id="openBtn" style="width:100%;margin-top:14px" disabled>Connect wallet and open</button>
+    <div class="log" id="olog"></div>
+  </details>
+  <div id="list"></div>
+</div>
+<script type="module">
+  import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex, hexToString } from "https://esm.sh/viem@2.57.7";
+  import { mainnet } from "https://esm.sh/viem@2.57.7/chains";
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const P = new URLSearchParams(location.search);
+  const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
+  const mAbi = parseAbi([
+    "function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)",
+    "function stake(uint256 id, bool yes, uint128 amount)", "function resolve(uint256 id)", "function settle(uint256 id)", "function claim(uint256 id) returns (uint256)",
+    "function claimable(uint256 id, address user) view returns (uint256)",
+    "function yesStake(uint256, address) view returns (uint128)", "function noStake(uint256, address) view returns (uint128)",
+    "function get(uint256 id) view returns ((address creator,uint64 closeAt,uint64 resolveAfter,uint64 askedAt,uint8 phase,uint96 feeEscrow,uint128 yesPool,uint128 noPool,uint128 winnersShare,bytes32 requestId) m, bytes body)",
+    "error StillPending()", "error TooEarly()", "error Closed()",
+  ]);
+  const regAbi = parseAbi(["function price() view returns (uint256)", "function get(bytes32) view returns ((address asker,uint64 askedAt,uint8 status) k,(bytes32 questionHash,bytes answer,bytes32 answerHash,uint8 answerType,uint16 panelSize,uint16 quorum,uint16 agreed,uint64 issuedAt,uint64 expiresAt,bool verified) a)"]);
+  const PH = ["none", "open", "asked", "yes", "no", "void"];
+  const pub = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+  const data = await fetch("/api/markets").then((r) => r.json()).catch(() => ({}));
+  const M = data.market, REG = data.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
+  const fmt = (ts) => new Date(Number(ts) * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const imd = (v) => Number(formatEther(BigInt(v))).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const bar = (y, n) => { const t = Number(y) + Number(n); const p = t ? Math.round(Number(y) * 100 / t) : 50; return `<div class="bar"><div class="y" style="width:${Math.max(p, 12)}%">YES ${p}%</div><div class="n">${100 - p}% NO</div></div>`; };
+  const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
+  async function wallet() {
+    if (!window.ethereum) throw new Error("No wallet in this browser. Open the page in MetaMask or Rabby, or on desktop with the extension.");
+    const w = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
+    const [account] = await w.requestAddresses();
+    if ((await w.getChainId()) !== 1) await w.switchChain({ id: 1 });
+    return { w, account };
+  }
+  async function allow(w, account, amount, log) {
+    const a = await pub.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [account, M] });
+    if (a >= amount) return;
+    log("Approve IMD in your wallet…");
+    await pub.waitForTransactionReceipt({ hash: await w.writeContract({ account, address: IMD, abi: erc20Abi, functionName: "approve", args: [M, amount] }) });
+  }
+  const send = async (w, account, fn, args, log) => { log("Confirm in your wallet…"); const h = await w.writeContract({ account, address: M, abi: mAbi, functionName: fn, args }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
+
+  if (data.stats) $("#stats").innerHTML = `<span class="pill">${data.stats.markets} markets</span><span class="pill">${data.stats.traders} traders</span><span class="pill">${imd(data.stats.volume)} IMD staked</span><span class="pill">${imd(data.stats.fees)} IMD fees</span>`;
+
+  async function showMarket(id) {
+    const [m, bodyHex] = await pub.readContract({ address: M, abi: mAbi, functionName: "get", args: [BigInt(id)] });
+    let body = {}; try { body = JSON.parse(hexToString(bodyHex)); } catch {}
+    const ph = PH[m.phase], now = Date.now() / 1000;
+    let swarm = "";
+    if (m.requestId !== "0x" + "0".repeat(64)) {
+      const [k, a] = await pub.readContract({ address: REG, abi: regAbi, functionName: "get", args: [m.requestId] }).catch(() => [null]);
+      if (k) swarm = k.status === 1 ? "The swarm is answering…" : k.status === 2 ? `Swarm answered ${a.answer.endsWith("1") ? "Yes" : "No"}, ${a.agreed}/${a.panelSize} agreed, verified onchain` : "Swarm: no consensus";
+    }
+    const canStake = ph === "open" && now < Number(m.closeAt);
+    const act = ph === "open" && now >= Number(m.resolveAfter) ? ["resolve", "Ask the swarm now"] : ph === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
+    $("#view").innerHTML = `<div class="card"><span class="tag ${ph}">${ph === "yes" ? "resolved YES" : ph === "no" ? "resolved NO" : ph}</span>
+      <p class="q">${esc(body.question)}</p>${bar(m.yesPool, m.noPool)}
+      <div class="meta">Yes pool ${imd(m.yesPool)} IMD · No pool ${imd(m.noPool)} IMD<br>betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}${swarm ? "<br>" + esc(swarm) : ""}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · share <a href="?id=${id}">${location.host}/market?id=${id}</a></div>
+      ${canStake ? `<div class="row" style="margin-top:12px"><div><input id="amt" type="number" min="0.01" step="0.01" value="1"></div><div style="display:flex;gap:8px"><button class="y" id="by">Bet YES</button><button class="n" id="bn">Bet NO</button></div></div>` : ""}
+      ${act ? `<button id="act" style="width:100%;margin-top:12px">${act[1]}</button>` : ""}
+      ${["yes", "no", "void"].includes(ph) ? `<button id="claim" style="width:100%;margin-top:12px">Claim my winnings / refund</button>` : ""}
+      <div class="log" id="vlog"></div></div>`;
+    const log = logger($("#vlog"));
+    const run = (fn) => async (e) => { e.target.disabled = true; try { await fn(); log("Done.", "ok"); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); e.target.disabled = false; } };
+    const bet = (yes) => run(async () => { const { w, account } = await wallet(); const amt = parseEther(String($("#amt").value || "0")); await allow(w, account, amt, log); await send(w, account, "stake", [BigInt(id), yes, amt], log); });
+    if (canStake) { $("#by").onclick = bet(true); $("#bn").onclick = bet(false); }
+    if (act) $("#act").onclick = run(async () => { const { w, account } = await wallet(); await send(w, account, act[0], [BigInt(id)], log); });
+    if ($("#claim")) $("#claim").onclick = run(async () => { const { w, account } = await wallet(); const c = await pub.readContract({ address: M, abi: mAbi, functionName: "claimable", args: [BigInt(id), account] }); if (c === 0n) throw new Error("Nothing to claim for this wallet."); log(`Claiming ${imd(c)} IMD`); await send(w, account, "claim", [BigInt(id)], log); });
+  }
+
+  // open form
+  let draft = null, timer;
+  const local = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+  const c = new Date(Date.now() + 86400e3); c.setMinutes(0, 0, 0); $("#close").value = local(c); $("#after").value = local(new Date(+c + 3600e3));
+  $("#q").oninput = () => { clearTimeout(timer); draft = null; $("#openBtn").disabled = true; timer = setTimeout(checkQ, 700); };
+  async function checkQ() {
+    const q = $("#q").value.trim(); if (!q) return;
+    $("#draft").textContent = "Checking with the swarm…";
+    const r = await fetch("/api/wagers?draft=" + encodeURIComponent(q)).then((r) => r.json());
+    if (r.error === "not_yes_no") return ($("#draft").textContent = `The swarm reads this as a ${r.answerType} question. Rephrase as yes/no.`);
+    if (r.error) return ($("#draft").textContent = "The swarm won't take this: " + (r.blockers || []).map((b) => b.detail).join(" "));
+    draft = r.request; $("#draft").textContent = `✓ yes/no · panel ${draft.panelSize}, quorum ${draft.quorum}`; $("#openBtn").disabled = !M;
+  }
+  $("#openBtn").onclick = async () => {
+    const log = logger($("#olog")); $("#openBtn").disabled = true;
+    try {
+      const { w, account } = await wallet();
+      const fee = await pub.readContract({ address: REG, abi: regAbi, functionName: "price" });
+      await allow(w, account, fee, log);
+      const closeAt = Math.floor(new Date($("#close").value) / 1000), after = Math.max(closeAt, Math.floor(new Date($("#after").value) / 1000));
+      const h = await send(w, account, "open", [stringToHex(JSON.stringify(draft)), BigInt(closeAt), BigInt(after)], log);
+      const rc = await pub.getTransactionReceipt({ hash: h });
+      const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase()).topics[1]);
+      location.href = "?id=" + id;
+    } catch (e) { log(e?.shortMessage || e?.message || String(e), "err"); $("#openBtn").disabled = false; }
+  };
+
+  const rows = data.rows || [];
+  $("#list").innerHTML = rows.map((r) => `<div class="card"><span class="tag ${r.phase}">${r.phase}</span> <span class="meta">#${r.id} · ${r.stakers} traders · closes ${fmt(r.closeAt)}</span><p class="q"><a href="?id=${r.id}">${esc(r.question)}</a></p>${bar(r.yesPool, r.noPool)}<div class="meta">${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD in the pool</div></div>`).join("");
+  if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;
+  else if (P.get("id")) { $("#newbox").hidden = true; $("#list").hidden = true; await showMarket(P.get("id")); }
+  else if (P.get("q")) { $("#newbox").open = true; $("#q").value = P.get("q"); checkQ(); }
+</script>
+</body>
+</html>

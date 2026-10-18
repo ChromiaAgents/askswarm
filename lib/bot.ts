@@ -269,10 +269,12 @@ bot.callbackQuery("chk", async (ctx) => {
 bot.command("bet", async (ctx) => {
   const q = (ctx.match ?? "").toString().replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 500);
   if (!q) return ctx.reply("Usage: /bet <a yes/no question>\ne.g. /bet Will ETH close above $3,000 on 31 Oct 2026 (Coinbase daily close)?");
-  const url = `${BASE_URL}/wager?q=${encodeURIComponent(q)}`;
-  return ctx.reply(`🎲 <b>${esc(q)}</b>\nStake IMD on your side. Whoever the swarm's verified answer says was right takes the pot; a split panel refunds both.`, {
+  // A prediction market (many people per side) when SwarmMarket is live, else a 1v1 SwarmWager.
+  const market = !!process.env.MARKET_ADDRESS;
+  const url = `${BASE_URL}/${market ? "market" : "wager"}?q=${encodeURIComponent(q)}`;
+  return ctx.reply(`🎲 <b>${esc(q)}</b>\n${market ? "Open a market: anyone stakes IMD on Yes or No, the swarm's verified answer pays the winning side, a split panel refunds everyone." : "Stake IMD on your side. Whoever the swarm's verified answer says was right takes the pot; a split panel refunds both."}`, {
     parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id },
-    reply_markup: new InlineKeyboard().url("Open the wager", url),
+    reply_markup: new InlineKeyboard().url(market ? "Open the market" : "Open the wager", url),
   });
 });
 
