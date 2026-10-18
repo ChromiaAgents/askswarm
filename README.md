@@ -8,6 +8,8 @@ onchain transaction. Pay in CHR through Chromia Pay, or ask free on Sepolia.
 
 Built by EVAL Engine for the Identity MD hackathon, October 2026.
 
+**Demo (40 s):** [docs/askswarm-demo.mp4](docs/askswarm-demo.mp4)
+
 ## How it works
 
 ```mermaid

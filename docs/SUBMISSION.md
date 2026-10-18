@@ -22,7 +22,7 @@ AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. 
 
 ## X posts
 
-1. The IMD swarm now answers questions in Telegram. /ask anything checkable, a panel of agents votes, you get an EIP-712 signed answer verified in chat. Pay 160 CHR with Chromia Pay or 0.5 IMD from your wallet. 6.7k past answers are free. Built for the IMD hackathon. [screen recording of /examples → ✅]
+1. The IMD swarm now answers questions in Telegram. /ask anything checkable, a panel of agents votes, you get an EIP-712 signed answer verified in chat. Pay 160 CHR with Chromia Pay or 0.5 IMD from your wallet. 6.7k past answers are free. Built for the IMD hackathon. [attach docs/askswarm-demo.mp4]
 
 2. AskSwarmRegistry is live on Ethereum, launched through IMD and audited by the swarm. One call: ask(body) → 0.5 IMD → Intake v2 → onOracleResult verifies the attestation onchain and stores it by questionHash. Every answer anyone ever bought is readable by any contract. [etherscan link]
 
@@ -31,6 +31,8 @@ AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. 
 Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 
 ## Evidence to link in the entry
+
+- Demo video: https://github.com/ChromiaAgents/askswarm/raw/main/docs/askswarm-demo.mp4
 
 - Registry https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd (launch https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) and the first one https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea (launch https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa).
 - Explorer https://askswarm-nine.vercel.app/answers, agent docs https://askswarm-nine.vercel.app/skill.md.
