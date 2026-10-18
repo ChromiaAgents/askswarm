@@ -5,15 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {AskSwarmRegistry} from "../src/AskSwarmRegistry.sol";
 import {IIntake, OracleAttestation} from "../src/IIntake.sol";
 import {SwarmWager} from "../src/SwarmWager.sol";
+import {MockIntake, MockERC20} from "./mocks/IntakeMocks.sol";
 
 interface IERC20W {
     function approve(address, uint256) external returns (bool);
     function balanceOf(address) external view returns (uint256);
 }
 
-/// Mainnet fork: real Intake v2 and IMD, a fresh registry whose attester is a test key, and the
-/// plane's writer impersonated to deliver results. `forge test --fork-url $ETH_RPC_URL --match-path test/SwarmWager.t.sol`
-contract SwarmWagerTest is Test {
+/// Offline by default; on a mainnet fork uses real Intake v2 and IMD. A fresh test-only registry
+/// accepts fixture signatures; the production registry is never redeployed by the launch.
+abstract contract SwarmWagerTestBase is Test {
     address constant INTAKE = 0xa43e6F75ee006411F79Ac1C84120606C2330DE82;
     address constant IMD = 0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7;
     uint256 constant PK = 0xB0B;
@@ -26,7 +27,14 @@ contract SwarmWagerTest is Test {
     bytes constant BODY =
         '{"v":1,"question":"Did Argentina win the 2022 FIFA World Cup?","chainId":1,"window":{"hours":24},"answerType":"bool","evidence":"panel","panelSize":15,"quorum":11,"validForSeconds":86400}';
 
-    function setUp() public {
+    function setUp() public virtual {
+        if (INTAKE.code.length == 0) {
+            vm.chainId(1);
+            vm.roll(26_300_000);
+            vm.warp(1_792_300_000);
+            vm.etch(IMD, address(new MockERC20()).code);
+            vm.etch(INTAKE, address(new MockIntake(makeAddr("writer"), IMD)).code);
+        }
         reg = new AskSwarmRegistry(INTAKE, IMD, vm.addr(PK));
         wager = new SwarmWager(address(reg), IMD);
         for (uint256 i; i < 2; i++) {
@@ -41,7 +49,9 @@ contract SwarmWagerTest is Test {
 
     function _open(bool aliceSaysYes) internal returns (uint256 id) {
         vm.prank(alice);
-        id = wager.create(BODY, aliceSaysYes, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 hours));
+        id = wager.create(
+            BODY, aliceSaysYes, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 hours)
+        );
         vm.prank(bob);
         wager.join(id);
         vm.warp(block.timestamp + 1 hours);
@@ -54,9 +64,18 @@ contract SwarmWagerTest is Test {
     }
 
     function _answer(uint256 id, bytes memory ans, uint8 t, uint16 panel, uint16 quorum, uint16 agreed) internal {
-        bytes32 rid = _rid(id);
-        OracleAttestation memory a = OracleAttestation({
-            requestId: rid,
+        OracleAttestation memory a = _attestation(id, ans, t, panel, quorum, agreed);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(PK, reg.digest(a));
+        _deliver(id, a, abi.encodePacked(r, s, v));
+    }
+
+    function _attestation(uint256 id, bytes memory ans, uint8 t, uint16 panel, uint16 quorum, uint16 agreed)
+        internal
+        view
+        returns (OracleAttestation memory a)
+    {
+        a = OracleAttestation({
+            requestId: _rid(id),
             chainId: block.chainid,
             questionHash: keccak256(BODY),
             answerType: t,
@@ -72,21 +91,35 @@ contract SwarmWagerTest is Test {
             issuedAt: uint64(block.timestamp),
             expiresAt: uint64(block.timestamp + 1 days)
         });
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(PK, reg.digest(a));
+    }
+
+    function _deliver(uint256 id, OracleAttestation memory a, bytes memory signature) internal {
+        bytes32 rid = _rid(id);
         vm.prank(IIntake(INTAKE).writer());
-        IIntake(INTAKE).complete(rid, 0, bytes32(0), "", abi.encode(rid, a, abi.encodePacked(r, s, v)));
+        IIntake(INTAKE).complete(rid, 0, bytes32(0), "", abi.encode(rid, a, signature));
+        (AskSwarmRegistry.Ask memory k,) = reg.get(rid);
+        assertTrue(k.status != AskSwarmRegistry.Status.Pending, "registry callback did not land");
     }
 
     function _fail(uint256 id, uint8 status) internal {
         bytes32 rid = _rid(id);
         vm.prank(IIntake(INTAKE).writer());
-        IIntake(INTAKE).complete(rid, status, bytes32(0), "", abi.encode(rid, status, bytes32("disagreed"), uint16(10), uint16(14), bytes("")));
+        IIntake(INTAKE)
+            .complete(
+                rid,
+                status,
+                bytes32(0),
+                "",
+                abi.encode(rid, status, bytes32("disagreed"), uint16(10), uint16(14), bytes(""))
+            );
     }
 
     function _bal(address u) internal view returns (uint256) {
         return IERC20W(IMD).balanceOf(u);
     }
+}
 
+contract SwarmWagerTest is SwarmWagerTestBase {
     // ---- outcomes ----
 
     function test_yesWins() public {
@@ -160,7 +193,8 @@ contract SwarmWagerTest is Test {
 
     function test_cancelUnmatched() public {
         vm.prank(alice);
-        uint256 id = wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
+        uint256 id =
+            wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
         vm.prank(bob);
         vm.expectRevert(SwarmWager.NotCreator.selector);
         wager.cancel(id);
@@ -174,7 +208,8 @@ contract SwarmWagerTest is Test {
 
     function test_anyoneCancelsAfterJoinBy() public {
         vm.prank(alice);
-        uint256 id = wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
+        uint256 id =
+            wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
         vm.warp(block.timestamp + 1 hours + 1);
         vm.prank(bob);
         vm.expectRevert(SwarmWager.TooLate.selector);
@@ -185,7 +220,8 @@ contract SwarmWagerTest is Test {
 
     function test_creatorCannotTakeBothSides() public {
         vm.prank(alice);
-        uint256 id = wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
+        uint256 id =
+            wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 2 hours));
         vm.prank(alice);
         vm.expectRevert(SwarmWager.SameParty.selector);
         wager.join(id);
@@ -193,7 +229,8 @@ contract SwarmWagerTest is Test {
 
     function test_resolveWaitsAndOnlyOnce() public {
         vm.prank(alice);
-        uint256 id = wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 5 hours));
+        uint256 id =
+            wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 5 hours));
         vm.prank(bob);
         wager.join(id);
         vm.expectRevert(SwarmWager.TooEarly.selector);
@@ -215,7 +252,8 @@ contract SwarmWagerTest is Test {
 
     function test_abandonWhenNeverResolved() public {
         vm.prank(alice);
-        uint256 id = wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 hours));
+        uint256 id =
+            wager.create(BODY, true, STAKE, uint64(block.timestamp + 1 hours), uint64(block.timestamp + 1 hours));
         vm.prank(bob);
         wager.join(id);
         vm.warp(block.timestamp + 1 hours + 3 days);

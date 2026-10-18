@@ -43,10 +43,12 @@ interface IAskSwarmRegistry {
 /// equal stake. After `resolveAfter`, anyone calls `resolve`: the contract buys the question through
 /// AskSwarmRegistry, which verifies the swarm's EIP-712 attestation onchain. Anyone then calls
 /// `settle`: a verified strict-majority bool answer pays the whole pot to the right side. Anything
-/// else (refused, split panel, unverified, lost, wrong answer type, no answer in time) refunds both
-/// stakes. Nobody, including the creator, can pick the outcome.
+/// else (refused, split panel, unverified, lost, wrong answer type, still pending after timeout) refunds both
+/// stakes. Both parties must agree on a fixed fact and observation window before staking: the
+/// caller of `resolve` chooses when the body is sent, which can affect time-varying questions.
 ///
 /// The registry is the only source of truth: this contract never reads a signature or a price feed.
+/// It trusts the Intake writer's pairing of the request and signed question, and the oracle signer.
 /// It is the smallest useful example of a protocol building on the registry's verified memory.
 ///
 /// Invariants:
@@ -70,7 +72,7 @@ contract SwarmWager {
         address no;
         address creator;
         uint96 stake; // per side, in IMD wei
-        uint96 fee; // the swarm's price, escrowed from the creator at create
+        uint96 fee; // unspent request-fee escrow, including voluntary top-ups
         uint64 joinBy;
         uint64 resolveAfter;
         uint64 askedAt;
@@ -79,8 +81,10 @@ contract SwarmWager {
         address winner;
     }
 
-    /// @notice How long after `resolve` the swarm has to deliver before `settle` refunds.
+    /// @notice How long a pending request must wait after `resolve` before `settle` may refund.
     uint64 public constant ANSWER_WINDOW = 3 days;
+    /// @notice Latest permitted resolution time, measured from creation. Also bounds `joinBy`.
+    uint64 public constant MAX_TERM = 365 days;
     /// @notice Answer type the registry reports for a bool question.
     uint8 internal constant BOOL = 0;
 
@@ -92,9 +96,16 @@ contract SwarmWager {
     mapping(uint256 id => bytes body) public bodyOf;
 
     event Created(
-        uint256 indexed id, address indexed creator, bool creatorSaysYes, uint256 stake, uint64 joinBy, uint64 resolveAfter, bytes body
+        uint256 indexed id,
+        address indexed creator,
+        bool creatorSaysYes,
+        uint256 stake,
+        uint64 joinBy,
+        uint64 resolveAfter,
+        bytes body
     );
     event Joined(uint256 indexed id, address indexed counterparty);
+    event FeeToppedUp(uint256 indexed id, address indexed payer, uint256 amount);
     event Resolving(uint256 indexed id, bytes32 indexed requestId);
     event Paid(uint256 indexed id, address indexed winner, bool answer, uint256 amount);
     event Refunded(uint256 indexed id, uint8 reason);
@@ -124,7 +135,10 @@ contract SwarmWager {
         external
         returns (uint256 id)
     {
-        if (body.length == 0 || stake == 0 || joinBy <= block.timestamp || resolveAfter < joinBy) revert BadTerms();
+        if (
+            body.length == 0 || stake == 0 || joinBy <= block.timestamp || resolveAfter < joinBy
+                || uint256(resolveAfter) > block.timestamp + MAX_TERM
+        ) revert BadTerms();
         uint256 p = REGISTRY.price();
         if (p == 0 || p > type(uint96).max) revert BadTerms();
         id = ++count;
@@ -169,15 +183,28 @@ contract SwarmWager {
         emit Refunded(id, 0);
     }
 
+    /// @notice Add IMD to a matched wager's fee escrow if the registry price has risen.
+    /// Anyone may contribute; this is a gift to the creator's fee escrow. All unused fees go to
+    /// the creator on `resolve` or `abandon`, including contributions from other callers.
+    function topUpFee(uint256 id, uint96 amount) external {
+        Wager storage w = wagers[id];
+        if (w.state != State.Matched) revert WrongState(w.state);
+        if (amount == 0 || uint256(w.fee) + amount > type(uint96).max) revert BadTerms();
+        w.fee += amount;
+        _pull(msg.sender, amount);
+        emit FeeToppedUp(id, msg.sender, amount);
+    }
+
     /// @notice Buy the question from the swarm. Anyone, once both sides are in and `resolveAfter` passed.
     /// Pays the registry's current price from the escrowed fee and returns any remainder to the
-    /// creator. If the price rose above the escrow it reverts; `abandon` unwinds later.
+    /// creator. If the price rose above the escrow it reverts; anyone can `topUpFee`, or `abandon`
+    /// unwinds later. After the abandonment deadline, the first of `resolve` or `abandon` wins.
     function resolve(uint256 id) external {
         Wager storage w = wagers[id];
         if (w.state != State.Matched) revert WrongState(w.state);
         if (block.timestamp < w.resolveAfter) revert TooEarly();
         uint256 p = REGISTRY.price(); // what askAtMost pulls in this same transaction
-        if (p > w.fee) revert BadTerms(); // price rose above the escrow: wait, then `abandon`
+        if (p > w.fee) revert BadTerms(); // top up explicitly, or wait then `abandon`
         uint256 remainder = w.fee - p;
         w.state = State.Asked;
         w.askedAt = uint64(block.timestamp);
@@ -204,7 +231,9 @@ contract SwarmWager {
 
     /// @notice Pay out from the registry's record of the swarm's answer. Anyone may call.
     /// Pays the pot only on a verified bool answer a strict majority of its panel agreed on;
-    /// refunds both stakes on any other terminal outcome, or if nothing arrived within ANSWER_WINDOW.
+    /// refunds both stakes on any other terminal outcome, or if still pending after ANSWER_WINDOW.
+    /// A usable answer recorded before this call wins even after the timeout; an earlier timeout
+    /// refund is final. The registry records no delivery timestamp, so this is a race to settlement.
     function settle(uint256 id) external {
         Wager storage w = wagers[id];
         if (w.state != State.Asked) revert WrongState(w.state);

@@ -14,7 +14,7 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 |---|---|---|
 | AskSwarmRegistry | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) | [#2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) |
 | SwarmMarket | MARKET_ADDR | MARKET_LAUNCH |
-| SwarmWager | WAGER_ADDR | WAGER_LAUNCH |
+| SwarmWager | [`0xc0b13031…99bbe6`](https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6) | [#2189](https://explorer.imd.fun/launches/9781dc7e-23dc-4f1c-93f8-4766c016cac7) |
 
 Built by Chromia × EVAL Engine for the Identity MD hackathon, October 2026. Bot: [t.me/askswarm_bot](https://t.me/askswarm_bot).
 
