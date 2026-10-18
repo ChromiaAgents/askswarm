@@ -16,9 +16,9 @@ project, cannot be edited afterwards, prize paid to the contract's deployer addr
 Prize wallet: the launch's literal deployer is IMD's factory wallet, so name ours in the blurb like
 other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
-## Radar blurb (≤1000 chars; fill #WAGER and the prize wallet)
+## Radar blurb (≤1000 chars incl. the full prize wallet address; replace the zero address)
 
-AskSwarm turns the IMD oracle into something people and contracts use. AskSwarmRegistry (IMD launches #2088, #2099) pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash: a public, verified memory any contract can read. SwarmMarket (IMD launch #2190) runs yes/no prediction markets on it: anyone stakes IMD, the registry's verified answer pays the winners, 2% of the losing side funds the market's creator and free asks; SwarmWager (#2189) does 1v1 bets. A keeper resolves markets on time. Front ends: Telegram bot (/ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD from your own wallet; 6.7k past answers free; split-risk model trained on 7.8k IMD requests), an explorer of everything the swarm has said, and skill.md for agents. Every answer flows back into the open Eval Engine dataset. Registry 0x53e1e2f33f05086086adf618ca92c3cb0ab111cd. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x…
+AskSwarm turns the IMD oracle into something people and contracts use. AskSwarmRegistry (IMD launches #2088, #2099) pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash: a public memory any contract can read. SwarmMarket (#2190) runs yes/no prediction markets on it: anyone stakes IMD, the verified answer pays the winners, 2% of the losing side goes to the market's creator and to free asks. SwarmWager (#2189) does 1v1 bets. A keeper resolves markets on time. Front ends: Telegram bot (/ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD; 6.7k past answers free; split-risk model from 7.8k IMD requests), an answers explorer, skill.md for agents. Answers flow back into the open Eval Engine dataset. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x0000000000000000000000000000000000000000
 
 ## X posts
 
