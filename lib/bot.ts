@@ -264,6 +264,18 @@ bot.callbackQuery("chk", async (ctx) => {
   catch (e: any) { await ctx.answerCallbackQuery(`error: ${String(e.message).slice(0, 150)}`); }
 });
 
+// /bet <yes/no question>: a link to open a SwarmWager on it. The page drafts the question with the
+// swarm, takes the creator's side and stake from their own wallet, and gives a link for the other side.
+bot.command("bet", async (ctx) => {
+  const q = (ctx.match ?? "").toString().replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 500);
+  if (!q) return ctx.reply("Usage: /bet <a yes/no question>\ne.g. /bet Will ETH close above $3,000 on 31 Oct 2026 (Coinbase daily close)?");
+  const url = `${BASE_URL}/wager?q=${encodeURIComponent(q)}`;
+  return ctx.reply(`🎲 <b>${esc(q)}</b>\nStake IMD on your side. Whoever the swarm's verified answer says was right takes the pot; a split panel refunds both.`, {
+    parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id },
+    reply_markup: new InlineKeyboard().url("Open the wager", url),
+  });
+});
+
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
 bot.command("start", (ctx) => ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?\n\nOr /examples to pick one."));
 bot.catch((e) => console.error("bot error", e.error));
