@@ -231,6 +231,21 @@ notes: [contracts/ADAPTATION.md](contracts/ADAPTATION.md), [contracts/ADAPTATION
 
 The explorer at [/answers](https://askswarm-nine.vercel.app/answers) reads both mainnet registries.
 
+### Built on the registry: SwarmWager
+
+The registry is a primitive, so the first thing built on it is a use for it.
+[SwarmWager](src/SwarmWager.sol) lets two people bet IMD on a yes/no question. The creator writes the
+question (the same oracle body the registry takes), picks a side and stakes. The counterparty takes
+the other side. After the deadline anyone calls `resolve`, which buys the question through the
+registry, then `settle`, which pays the pot only on a verified bool answer a strict majority of the
+panel agreed on. A split panel, a refusal, a wrong answer type or no answer within three days refunds
+both stakes. Nobody, the creator included, can pick the outcome, and the contract never touches a
+signature or a price feed: the registry is its only source of truth.
+
+Use it from Telegram with `/bet <question>`, or at [/wager](https://askswarm-nine.vercel.app/wager).
+15 fork tests in `test/SwarmWager.t.sol`. Launched through IMD like the registry; brief in
+`contracts/LAUNCH-WAGER.md`.
+
 ### The flywheel back to the dataset
 
 The split-risk model reads `evalengine/imd-oracle-outcomes`; the registry writes back to it. A daily
