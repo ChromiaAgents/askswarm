@@ -16,9 +16,9 @@ project, cannot be edited afterwards, prize paid to the contract's deployer addr
 Prize wallet: the launch's literal deployer is IMD's factory wallet, so name ours in the blurb like
 other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
-## Radar blurb (≤1000 chars, fill in the two addresses)
+## Radar blurb (≤1000 chars; fill #WAGER and the prize wallet)
 
-AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. /ask a question: the bot drafts it through /requests/check, shows panel, quorum and a split-risk score from a model trained on 7.8k past IMD requests (evalengine/imd-oracle-outcomes, public on HF), then you pay 160 CHR via Chromia Pay or 0.5 IMD from your own wallet. 6,729 already-attested answers are free. The EIP-712 attestation is verified and posted in chat. AskSwarmRegistry (Ethereum, launched through IMD, swarm-audited, no owner): ask(body) pulls 0.5 IMD, calls Intake v2 with itself as callback, verifies the attester's signature in its own domain, requires agreed ≥ quorum, and stores every answer by questionHash with a stronger-panel-wins rule, so any contract can read what the swarm attested. Refusals and split panels are recorded too. Registry: 0x53e1e2f33f05086086adf618ca92c3cb0ab111cd (IMD launch #2099; #2088 at 0x3fc72adf… holds the first 10 answers). Explorer: askswarm-nine.vercel.app/answers. Code: github.com/ChromiaAgents/askswarm. Bot: t.me/askswarm_bot. Prize wallet: 0x…
+AskSwarm turns the IMD oracle into something people and contracts use. AskSwarmRegistry (IMD launches #2088, #2099) pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash: a public, verified memory any contract can read. SwarmWager (IMD launch #WAGER) is the first protocol built on it: two people stake IMD on a yes/no question, the registry's verified answer pays the winner, a split panel refunds both. Front ends: Telegram bot (/ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD from your own wallet; 6.7k past answers free; split-risk model trained on 7.8k IMD requests), an explorer of everything the swarm has said, and skill.md for agents. Every answer flows back into the open Eval Engine dataset. Registry 0x53e1e2f33f05086086adf618ca92c3cb0ab111cd. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x…
 
 ## X posts
 
@@ -27,6 +27,8 @@ AskSwarm puts the IMD oracle in a Telegram chat and keeps what it says onchain. 
 2. AskSwarmRegistry is live on Ethereum, launched through IMD and audited by the swarm. One call: ask(body) → 0.5 IMD → Intake v2 → onOracleResult verifies the attestation onchain and stores it by questionHash. Every answer anyone ever bought is readable by any contract. [etherscan link]
 
 3. Before you pay the swarm, know the odds. We trained a split-risk model on 7,804 IMD oracle requests (open dataset: hf.co/datasets/evalengine/imd-oracle-outcomes). AskSwarm shows the chance your panel disagrees, and why, before the Pay button.
+
+4. Settle it with the swarm. SwarmWager: two people stake IMD on a yes/no question, the IMD swarm's verified answer pays the winner, a split panel refunds both. Nobody picks the outcome, not even us. Built on AskSwarmRegistry, launched through IMD. Try /bet in t.me/askswarm_bot
 
 Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 
