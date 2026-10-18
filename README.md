@@ -1,12 +1,22 @@
 # AskSwarm
 
-![What AskSwarm does: ask in Telegram, pay in CHR, the IMD swarm votes, you get an EIP-712 signed answer](docs/askswarm.png)
+![AskSwarm: ask the IMD swarm from Telegram, the signed verdict is verified onchain, prediction markets settle on it](docs/askswarm.png)
 
-Telegram bot: ask a factual question in chat, the [IMD](https://imd.fun) agent swarm answers it
-with an EIP-712 signed attestation, verified by the bot and linked back to the swarm job and the
-onchain transaction. Pay in CHR through Chromia Pay, or ask free on Sepolia.
+AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contracts use.
 
-Built by EVAL Engine for the Identity MD hackathon, October 2026.
+- **Ask** in Telegram (`/ask`), on the web, or as an agent ([skill.md](https://askswarm-nine.vercel.app/skill.md)). 6.7k past answers are free; a fresh one costs 160 CHR via Chromia Pay or 0.5 IMD from your own wallet.
+- **AskSwarmRegistry** pays the swarm, verifies its EIP-712 attestation onchain, and stores every answer by question hash: a public, verified memory any contract can read. Browse it at [/answers](https://askswarm-nine.vercel.app/answers).
+- **SwarmMarket** settles yes/no prediction markets on those answers (`/bet`, [/market](https://askswarm-nine.vercel.app/market)). Winners split the losing side; 2% of it goes half to the market's creator, half to fund free asks.
+- **SwarmWager** does the same for one-on-one bets.
+- All three contracts were audited, adapted and deployed by the IMD swarm itself through IMD launches. Every answer flows back into the open [Eval Engine dataset](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes) that the split-risk model learns from.
+
+| contract | address | IMD launch |
+|---|---|---|
+| AskSwarmRegistry | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) | [#2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) |
+| SwarmMarket | MARKET_ADDR | MARKET_LAUNCH |
+| SwarmWager | WAGER_ADDR | WAGER_LAUNCH |
+
+Built by Chromia × EVAL Engine for the Identity MD hackathon, October 2026. Bot: [t.me/askswarm_bot](https://t.me/askswarm_bot).
 
 **Demo (40 s):** [docs/askswarm-demo.mp4](docs/askswarm-demo.mp4)
 
@@ -50,41 +60,42 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph TG[Telegram]
-        U[User]
+    subgraph Users
+        U[Telegram /ask /bet]
+        WB["Web: /answers /market /wager"]
+        AG["Agents: skill.md, /api/*"]
     end
-    subgraph V[Vercel, two functions]
-        T[api/telegram.ts<br/>grammy webhook]
-        W[api/cpay-webhook.ts<br/>HMAC verify]
-        L[lib/bot.ts<br/>stateless handlers]
-        T --> L
-        W --> L
+    subgraph V[Vercel functions]
+        L[bot + APIs<br/>stateless]
     end
-    subgraph CP[Chromia Pay]
-        C[Hosted checkout]
-        H[Signed webhooks]
+    CP[Chromia Pay<br/>CHR checkout]
+    subgraph ETH[Ethereum mainnet]
+        R["AskSwarmRegistry<br/>verify EIP-712, store by questionHash"]
+        M["SwarmMarket<br/>yes/no pools, 2% fee"]
+        W["SwarmWager<br/>1v1 bets"]
+        IN["Intake v2"]
     end
-    subgraph ETH[Ethereum / Sepolia]
-        K[(Hot wallet<br/>gas + IMD only)]
-        IN["Intake v2<br/>0xa43e…de82"]
+    subgraph IMD[IMD swarm]
+        S[~1,000 agents<br/>quorum vote]
     end
-    subgraph IMD[IMD control plane]
-        CHK["/requests/check"]
-        RD["/intake/:chain/:tx"]
-        OR["/oracle/requests/:id"]
-        AT["/attestation<br/>EIP-712"]
-    end
-    U <-->|/ask, buttons| T
-    L -->|payments.create| C
-    H -->|payment.confirmed| W
-    L -->|"request(...)"| IN
-    K -. signs .-> IN
-    IN -->|Requested event| RD
-    L --> CHK
-    L --> RD
-    L --> OR
-    L --> AT
-    L -->|verifyTypedData| L
+    HF[(Eval Engine dataset<br/>Hugging Face)]
+    U --> L
+    WB --> L
+    AG --> L
+    L -->|payments| CP
+    L -->|"ask(body)"| R
+    WB -->|wallet| M
+    WB -->|wallet| W
+    M -->|"resolve: askAtMost"| R
+    W -->|"resolve: askAtMost"| R
+    M -. "settle: get(requestId)" .-> R
+    W -. "settle: get(requestId)" .-> R
+    R -->|"requestWithFailure, callback=R"| IN
+    IN --> S
+    S -->|"complete: signed attestation"| IN
+    IN -->|onOracleResult| R
+    R -. daily sync .-> HF
+    HF -. trains split-risk .-> L
 ```
 
 ### State lives in the message, not a database

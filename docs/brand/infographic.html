@@ -60,6 +60,8 @@
   .strip small{display:block;font-size:14px;line-height:1.3;color:rgba(255,248,248,.75);margin-top:6px}
   .logos{position:absolute;right:72px;top:70px;display:flex;align-items:center;gap:18px;font-size:15px;color:var(--slate)}
   .logos img{height:34px}
+  .mbar{display:flex;height:30px;border:2px solid #1F1A23;border-radius:999px;overflow:hidden;font:700 13px/30px 'NB International';margin-top:2px}
+  .mbar .my{background:#93F091;padding-left:10px}.mbar .mn{background:#FFB0C2;flex:1;text-align:right;padding-right:10px}
 </style>
 </head>
 <body>
@@ -74,7 +76,7 @@
   <header>
     <span class="eyebrow">Identity MD hackathon · Oct 2026</span>
     <h1>Ask<br>the <span class="accent">Swarm</span></h1>
-    <p class="sub">A Telegram bot with an onchain memory. Ask a question: 6.7k answers are already free. Otherwise <b>pay in CHR or IMD</b>, ~1,000 AI agents vote, and the <b>signed verdict is stored onchain</b> for every contract to read.</p>
+    <p class="sub">Ask the IMD swarm from Telegram. ~1,000 AI agents vote, the <b>signed verdict is verified and stored onchain</b>, and <b>prediction markets settle on it</b>. Three contracts, all launched through IMD.</p>
   </header>
 
   <section class="flow">
@@ -82,39 +84,39 @@
       <span class="n">1</span><img class="ic" src="message.svg">
       <h3>Ask</h3>
       <div class="chat">/ask Did Argentina win<br>the 2022 World Cup?</div>
-      <p style="margin-top:12px">Free precheck, split-risk score from 7.8k past requests, and a prior signed answer if the swarm already attested it.</p>
-      <span class="meta">Telegram · any group</span>
-    </div>
-    <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div class="card" style="--chip:var(--pink);--chip-s:var(--pink-s);--shadow:var(--pink-s)">
-      <span class="n">2</span><img class="ic" src="lock.svg">
-      <h3>Pay</h3>
-      <span class="btn">Pay 160 CHR</span><span class="btn ghost">0.5 IMD</span>
-      <p style="margin-top:10px">Chromia Pay checkout for non-IMD users, or 0.5 IMD from your own wallet into the registry.</p>
-      <span class="meta">Chromia Pay · own wallet</span>
+      <p style="margin-top:12px">6.7k past answers free. Otherwise pay 160 CHR via Chromia Pay or 0.5 IMD from your wallet.</p>
+      <span class="meta">Telegram · web · agents</span>
     </div>
     <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="card" style="--chip:var(--green);--chip-s:var(--green-s);--shadow:var(--green-s)">
-      <span class="n">3</span><img class="ic" src="ai.svg">
+      <span class="n">2</span><img class="ic" src="ai.svg">
       <h3>Swarm<br>votes</h3>
       <div class="dots"><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i></div>
       <p>The registry pays Intake v2 with itself as callback. 11 of 15 agents must agree.</p>
-      <span class="meta">Launched through IMD</span>
+      <span class="meta">IMD swarm · ~1,000 agents</span>
     </div>
     <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="card" style="--chip:var(--yellow);--chip-s:var(--yellow-s);--shadow:var(--yellow-s)">
-      <span class="n">4</span><img class="ic" src="data.svg">
-      <h3>Signed answer</h3>
-      <div class="chat"><span style="color:#93F091;font-weight:700">Yes</span> · 15/15 agreed<br>EIP-712 verified · 0x5598aa91…</div>
-      <p style="margin-top:10px">Verified onchain in the callback, stored by question hash, posted in chat.</p>
-      <span class="meta">Any contract can read it</span>
+      <span class="n">3</span><img class="ic" src="data.svg">
+      <h3>Verified<br>onchain</h3>
+      <div class="chat"><span style="color:#93F091;font-weight:700">Yes</span> · 12/15 agreed<br>EIP-712 verified</div>
+      <p style="margin-top:10px">AskSwarmRegistry checks the signature in the callback and stores the answer for any contract.</p>
+      <span class="meta">Public memory · no owner</span>
+    </div>
+    <svg class="arrow" viewBox="0 0 28 28"><path d="M4 14h18M14 6l8 8-8 8" fill="none" stroke="#1F1A23" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="card" style="--chip:var(--pink);--chip-s:var(--pink-s);--shadow:var(--pink-s)">
+      <span class="n">4</span><img class="ic" src="star5.svg">
+      <h3>Bet<br>on it</h3>
+      <div class="mbar"><span class="my" style="width:62%">YES 62%</span><span class="mn">38% NO</span></div>
+      <p style="margin-top:10px">SwarmMarket: stake IMD on Yes or No, the registry's verified answer pays the winners.</p>
+      <span class="meta">/bet · prediction markets</span>
     </div>
   </section>
 
   <footer class="strip">
     <div><span class="big"><span class="c">~2</span> min</span><small>question to signed verdict, 73–121 s per panel observed</small></div>
-    <div><span class="big"><span class="c">0</span> keys</span><small>Chromia Pay is non-custodial; the bot wallet holds only gas and IMD</small></div>
-    <div><span class="big">On<span class="c">chain</span></span><small>every answer bought lands in AskSwarmRegistry, EIP-712 verified, no owner</small></div>
+    <div><span class="big"><span class="c">3</span> contracts</span><small>registry, markets, wagers: audited and deployed by the IMD swarm itself</small></div>
+    <div><span class="big"><span class="c">2</span>% fee</span><small>on the losing side of each settled market, half to its creator, half funds free asks</small></div>
     <div><span class="big"><span class="c">6.7k</span> free</span><small>prior attested answers served instantly, from the open Eval Engine dataset</small></div>
   </footer>
 </body>
