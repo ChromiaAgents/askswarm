@@ -341,7 +341,7 @@
       : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, paid out automatically</span></div>` : "";
     const k1 = mults(m.yesPool, m.noPool, 0.01);
     $("#view").innerHTML = `<div class="mk">
-      <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets</span></div>
+      <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets${row.voidRiskBps != null ? ` · ${row.voidRiskBps < 1000 ? "🟢" : row.voidRiskBps < 2500 ? "🟡" : "🔴"} refund risk ${Math.round(row.voidRiskBps / 100)}%` : ""}</span></div>
       <h2 class="mt">${esc(T)}</h2>
       ${status}
       ${canStake ? `<div class="sides"><button class="side y on" data-s="1"><small>YES</small><b>${pct}%</b><span id="py">pays ${fx(k1.yes)}</span></button><button class="side n" data-s="0"><small>NO</small><b>${100 - pct}%</b><span id="pn">pays ${fx(k1.no)}</span></button></div>
@@ -359,6 +359,7 @@
     document.querySelector(".rules").innerHTML = `<p>The swarm is asked exactly: <i>“${esc(body.question)}”</i></p>
       <p>${body.panelSize ?? 15} AI agents answer; a clear majority (at least 7) must agree, and AskSwarmRegistry verifies their signature onchain. YES wins on Yes, NO on No. Split vote, one-sided market or no answer within 3 days: everyone is refunded.</p>
       <p>Winners split the losing side. 2% of it goes half to the market's creator, half to fund free asks.</p>
+      ${row.voidRiskBps != null ? `<p>Refund risk ${Math.round(row.voidRiskBps / 100)}%: the chance the swarm splits and everyone is refunded, from a model trained on 7,800 past IMD oracle requests (<a href="https://huggingface.co/datasets/evalengine/imd-oracle-outcomes">Eval Engine dataset</a>). Every settled market is written back into that dataset.</p>` : ""}
       <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id)}" target="_blank">share on X</a></p>`;
 
     const log = logger($("#vlog"));
@@ -427,11 +428,25 @@
     for (const x of r.claims || []) { const w = who.get(x.user) || { vol: 0, won: 0, lost: 0 }; const staked = (r.trades || []).filter((t) => t.user === x.user && r.phase !== "void" && t.side === r.phase).reduce((s, t) => s + Number(formatEther(BigInt(t.amount))), 0); w.won += Number(formatEther(BigInt(x.amount))) - staked; who.set(x.user, w); }
   }
   const lb = [...who.entries()].map(([u, w]) => ({ u, pnl: w.won - w.lost, vol: w.vol })).sort((a, b) => b.pnl - a.pnl || b.vol - a.vol).slice(0, 8);
+  // Season 1 points from onchain activity: 100 per IMD bet, 200 per IMD won, 50 per market opened that
+  // settled, 20 per answer bought from the swarm. Points only; no token is promised.
+  const answers = await fetch("/api/answers?limit=1000").then((r) => r.json()).catch(() => ({ rows: [] }));
+  const pts = new Map();
+  const add = (u, v) => { const k = u.toLowerCase(); pts.set(k, (pts.get(k) || 0) + v); };
+  for (const r of rows) {
+    for (const x of r.trades || []) add(x.user, 100 * Number(formatEther(BigInt(x.amount))));
+    if (["yes", "no"].includes(r.phase)) { add(r.creator, 50); for (const x of r.claims || []) { const st = (r.trades || []).filter((t) => t.user === x.user && t.side === r.phase).reduce((s, t) => s + Number(formatEther(BigInt(t.amount))), 0); add(x.user, 200 * Math.max(0, Number(formatEther(BigInt(x.amount))) - st)); } }
+  }
+  for (const a of answers.rows || []) if (a.status === "answered") add(a.asker, 20);
+  const ptb = [...pts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (!P.get("id") && (act.length || lb.length)) {
     const g = document.createElement("div"); g.className = "grid2";
     g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}">#${x.r.id}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
-      <div class="card"><h4>Leaderboard</h4><div class="lb">${lb.map((x, i) => `<div title="volume ${x.vol.toFixed(2)} IMD"><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span style="color:${x.pnl >= 0 ? "#2e8b2b" : "#c2185b"}">${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD</span></div>`).join("")}</div></div>`;
+      <div class="card"><h4>Leaderboard <span class="lbt" style="float:right;font-weight:400;font-size:13px"><a href="#" data-l="pts">points</a> · <a href="#" data-l="pnl">profit</a></span></h4>
+        <div class="lb" id="lb-pts">${ptb.map(([u, p], i) => `<div><span>${i + 1}. ${u.slice(0, 6)}…${u.slice(-4)}</span><span>${Math.round(p).toLocaleString()} pts</span></div>`).join("")}<p class="meta" style="margin:6px 0 0">Season 1 points from onchain activity: bets, wins, markets you open, answers you buy. Points only, no token promised.</p></div>
+        <div class="lb" id="lb-pnl" hidden>${lb.map((x, i) => `<div title="volume ${x.vol.toFixed(2)} IMD"><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span style="color:${x.pnl >= 0 ? "#2e8b2b" : "#c2185b"}">${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD</span></div>`).join("")}</div></div>`;
     $("#list").before(g);
+    g.querySelectorAll(".lbt a").forEach((a) => (a.onclick = (e) => { e.preventDefault(); $("#lb-pts").hidden = a.dataset.l !== "pts"; $("#lb-pnl").hidden = a.dataset.l !== "pnl"; }));
   }
   $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool, 0.01); return ` · <span class="mult">YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
   if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;

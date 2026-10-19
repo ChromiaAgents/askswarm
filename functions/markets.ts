@@ -3,6 +3,7 @@
 import { createPublicClient, http, parseAbi, hexToString, type Hex } from "viem";
 import { mainnet } from "viem/chains";
 import { getLogsChunked, getBlockTs } from "../lib/logs";
+import * as risk from "../lib/risk";
 
 export const maxDuration = 30;
 const MARKET = (process.env.MARKET_ADDRESS ?? "").toLowerCase() as Hex;
@@ -51,7 +52,10 @@ export async function GET() {
     }
     const rows = [...m.values()].sort((x, y) => Number(y.id) - Number(x.id)).map((r) => {
       const t = r.yesPool + r.noPool;
-      return { ...r, stakers: r.stakers.size, oddsYesBps: t === 0n ? 5000 : Number((r.yesPool * 10000n) / t) };
+      // Void risk: the split-risk model trained on the Eval Engine dataset, on this market's exact body.
+      let voidRiskBps: number | null = null;
+      try { if (r.body?.question) voidRiskBps = Math.round(risk.predict({ question: r.body.question, answerType: r.body.answerType ?? "bool", panelSize: r.body.panelSize ?? 15, quorum: r.body.quorum ?? 11, evidence: r.body.evidence }) * 10000); } catch {}
+      return { ...r, stakers: r.stakers.size, oddsYesBps: t === 0n ? 5000 : Number((r.yesPool * 10000n) / t), voidRiskBps };
     });
     const traders = new Set(rows.flatMap((r: any) => [...(m.get(r.id).stakers as Set<string>)])).size;
     const body = { market: MARKET, registry: process.env.REGISTRY_ADDRESS, stats: { markets: rows.length, traders, volume, fees }, rows };
