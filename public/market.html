@@ -157,7 +157,7 @@
   }
   function stepify(h, end) { const o = []; h.forEach((q, i) => { if (i) o.push({ t: q.t - 0.001, v: h[i - 1].v }); o.push(q); }); o.push({ t: end, v: h[h.length - 1].v }); return o; }
   function led(el, { points, target, fmtV, color, step, range }) {
-    const W = 710, H = 300, R = 72, B = 24, T = 14, iw = W - R;
+    const W = 710, H = 300, R = 86, B = 24, T = 14, iw = W - R;
     if (!points.length) { el.innerHTML = `<p class="meta">No data yet.</p>`; return; }
     const t0 = points[0].t, t1 = points[points.length - 1].t;
     let lo = Math.min(...points.map((p) => p.v)), hi = Math.max(...points.map((p) => p.v));
@@ -208,8 +208,9 @@
     let mode = pr ? "price" : "chance";
     box.innerHTML = `<div class="cbox" style="--line:${pr ? "#9E5ECF" : "#4FCD4C"}"><div class="chead" id="chead"></div><div class="chart" id="cv"></div>
       <div class="cfoot"><span class="meta" id="cnote"></span><div class="tog">${pr ? `<button data-m="price">Price</button>` : ""}<button data-m="chance">Chance</button></div></div></div>`;
-    const usd = (v) => "$" + v.toLocaleString(undefined, { minimumFractionDigits: v < 100 ? 2 : 0, maximumFractionDigits: v < 100 ? 4 : 2 });
-    const tick = () => { const d = Math.max(0, closeAt - Date.now() / 1000), h = Math.floor(d / 3600), mi = Math.floor((d % 3600) / 60), se = Math.floor(d % 60); const el = $("#cd"); if (el) el.textContent = d > 0 ? `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}:${String(se).padStart(2, "0")}` : "closed"; };
+    const usd = (v) => "$" + v.toLocaleString(undefined, { minimumFractionDigits: v < 100 ? 2 : 0, maximumFractionDigits: v < 100 ? 4 : v < 10000 ? 2 : 0 });
+    const usdAxis = (v) => "$" + v.toLocaleString(undefined, { maximumFractionDigits: v < 100 ? 3 : 0 });
+    const tick = () => { const d = Math.max(0, closeAt - Date.now() / 1000), dd = Math.floor(d / 86400), h = Math.floor((d % 86400) / 3600), mi = Math.floor((d % 3600) / 60), se = Math.floor(d % 60); const el = $("#cd"); if (el) el.textContent = d > 0 ? `${dd ? dd + "d " : ""}${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}:${String(se).padStart(2, "0")}` : "closed"; };
     async function render() {
       clearInterval(pxTimer);
       document.querySelectorAll(".tog button").forEach((b) => b.classList.toggle("on", b.dataset.m === mode));
@@ -223,11 +224,13 @@
       } else {
         box.querySelector(".cbox").style.setProperty("--line", "#9E5ECF");
         const load = async () => {
-          const r = await fetch(`/api/price?pair=${pr.pair}&from=${Math.floor(start)}&to=${Math.floor(endT)}`).then((x) => x.json()).catch(() => ({}));
+          // At least 24h of context, so a fresh market still shows where the price has been.
+          const from = Math.min(start, endT - 86400);
+          const r = await fetch(`/api/price?pair=${pr.pair}&from=${Math.floor(from)}&to=${Math.floor(endT)}`).then((x) => x.json()).catch(() => ({}));
           if (!r.points?.length) { $("#cv").innerHTML = `<p class="meta">Price feed unavailable for ${pr.pair}.</p>`; return; }
           const cur = open ? r.current : r.points[r.points.length - 1].v, diff = cur - pr.target, winning = pr.below ? diff < 0 : diff > 0;
           $("#chead").innerHTML = `<div><div class="k">◎ Target</div><div class="v">${usd(pr.target)}</div></div><div class="cur"><div class="k">● ${open ? "Current" : "At close"}</div><div class="v">${usd(cur)}<span class="d ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "↑" : "↓"}${usd(Math.abs(diff))}</span></div></div><div class="cd" id="cd"></div>`;
-          led($("#cv"), { points: r.points, target: pr.target, fmtV: usd, color: "#9E5ECF" });
+          led($("#cv"), { points: r.points, target: pr.target, fmtV: usdAxis, color: "#9E5ECF" });
           $("#cnote").textContent = `${pr.pair} on Coinbase · ${winning ? "YES" : "NO"} side ahead right now · display only, the swarm settles`;
           tick();
         };
