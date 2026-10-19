@@ -7,6 +7,7 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 - **Ask** in Telegram (`/ask`), on the web, or as an agent ([skill.md](https://askswarm-nine.vercel.app/skill.md)). 6.7k past answers are free; a fresh one costs 160 CHR via Chromia Pay or 0.5 IMD from your own wallet.
 - **AskSwarmRegistry** pays the swarm, verifies its EIP-712 attestation onchain, and stores every answer by question hash: a public, verified memory any contract can read. Browse it at [/answers](https://askswarm-nine.vercel.app/answers).
 - **SwarmMarket** settles yes/no prediction markets on those answers (`/bet`, [/market](https://askswarm-nine.vercel.app/market)). Winners split the losing side; 2% of it goes half to the market's creator, half to fund free asks.
+- **Daily rounds:** a keeper opens "ETH up or down today" and "BTC up or down today" every day at the Coinbase price, seeds both sides, asks the swarm after the daily close and pays out. No human in the loop.
 - **SwarmWager** does the same for one-on-one bets.
 - All three contracts were audited, adapted and deployed by the IMD swarm itself through IMD launches. Every answer flows back into the open [Eval Engine dataset](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes) that the split-risk model learns from.
 
@@ -256,6 +257,16 @@ signature or a price feed: the registry is its only source of truth.
 Use it from Telegram with `/bet <question>`, or at [/wager](https://askswarm-nine.vercel.app/wager).
 15 fork tests in `test/SwarmWager.t.sol`. Launched through IMD like the registry; brief in
 `contracts/LAUNCH-WAGER.md`.
+
+### Keeper and daily rounds
+
+`api/keeper` runs every 10 minutes (Vercel cron). SwarmMarket only accepts `resolve` within an hour
+of a market's deadline, so the keeper calls it on time, settles anything the swarm has answered,
+unwinds what can no longer resolve, and does the same for wagers. Each day before 18:00 UTC it also
+opens one round per pair in `DAILY_PAIRS` (default ETH-USD, BTC-USD): the question is "Was the
+Coinbase ETH-USD daily close on <today> above <price at open>?", betting closes at 23:00 UTC, the
+swarm is asked at 00:15 UTC, and the house seeds `DAILY_SEED_IMD` (0.1) on each side so the round
+is never one-sided. Every call it makes is permissionless; anyone can run the same loop.
 
 ### The flywheel back to the dataset
 
