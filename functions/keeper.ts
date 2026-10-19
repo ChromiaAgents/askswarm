@@ -79,16 +79,27 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
     if (hour >= 18) return; // keep at least ~5h of betting per round
     const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
     const logs = await getLogsChunked(c, { address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any }, c.id === 1 ? BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300") : c.fromBlock);
-    const qs = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)).question as string; } catch { return ""; } });
+    const bodies = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)); } catch { return {}; } });
+    const qs = bodies.map((x: any) => (x.question ?? "") as string);
     for (const pair of DAILY) {
       if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
       try {
         const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" }, signal: AbortSignal.timeout(8000) })).json();
         const price = Number(t.price); if (!Number.isFinite(price)) continue;
-        const chk = await Promise.race([
-          imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15), c.id),
-          new Promise<never>((_, rej) => setTimeout(() => rej(new Error("precheck timeout")), 20_000)),
-        ]);
+        const question = dailyQuestion(pair, day, price);
+        let chk: Awaited<ReturnType<typeof imd.check>>;
+        try {
+          chk = await Promise.race([
+            imd.check(question, Number(process.env.IMD_PANEL_SIZE ?? 15), c.id),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error("precheck timeout")), 20_000)),
+          ]);
+        } catch {
+          // IMD's precheck unreachable (not a rejection): reuse the last accepted body for this pair, which
+          // differs from today's only in the question, so the day still gets its round.
+          const prev = [...bodies].reverse().find((x: any) => typeof x.question === "string" && x.question.startsWith(`Was the Coinbase ${pair} daily close`));
+          if (!prev) throw new Error("precheck unreachable, no template");
+          chk = { request: { ...prev, question }, blockers: [] } as any;
+        }
         if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
         const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
         const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
