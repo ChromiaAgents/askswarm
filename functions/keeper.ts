@@ -23,6 +23,9 @@ const IMD_TOKEN = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
 // Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase price when the round
 // opens, settled by the swarm on that day's close. The house seeds both sides so every round is live.
 const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) => s.trim()).filter(Boolean);
+// Precheck codes that do not mean "bad question": the future (asked after the close) and IMD's own
+// infra being briefly down (the onchain request is recorded and answered when it recovers).
+const SOFT = new Set(["not_answerable", "chain_unavailable"]);
 const SEED = parseEther(process.env.DAILY_SEED_IMD ?? "0.1");
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const dailyQuestion = (pair: string, day: Date, target: number) =>
@@ -71,7 +74,7 @@ export async function runKeeper(): Promise<Act[]> {
         const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" } })).json();
         const price = Number(t.price); if (!Number.isFinite(price)) continue;
         const chk = await imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15));
-        if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => b.code !== "not_answerable")) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
+        if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
         const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
         const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
         await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, 500000000000000000n + 2n * SEED] });

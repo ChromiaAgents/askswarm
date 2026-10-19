@@ -55,7 +55,7 @@ export async function GET(req: Request) {
     // not_answerable today. That is the only blocker we accept: the swarm is asked after the
     // deadline, and if it still refuses then, the contract refunds everyone.
     const blockers = chk.blockers ?? [];
-    const futureOnly = blockers.length > 0 && blockers.every((b) => b.code === "not_answerable");
+    const futureOnly = blockers.length > 0 && blockers.every((b) => b.code === "not_answerable" || b.code === "chain_unavailable");
     if (!chk.request || (blockers.length && !futureOnly)) return json({ error: "blocked", blockers }, 409);
     if (chk.request.answerType !== "bool") return json({ error: "not_yes_no", answerType: chk.request.answerType }, 409);
     return json({ request: chk.request, future: futureOnly, wager: WAGER, registry: process.env.REGISTRY_ADDRESS, imd: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" });
