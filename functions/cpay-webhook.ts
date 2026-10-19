@@ -27,7 +27,11 @@ export async function POST(req: Request): Promise<Response> {
   try {
     await askAndMark(md.chatId, md.statusMsgId, md.question, ASK_CHAIN);
   } catch (e: any) {
-    console.error("ask after payment failed", p.id, e);
+    // Paid but not asked: say so on the card (which also releases the claim, since the text changes),
+    // and answer 5xx so Chromia Pay redelivers and the next attempt can claim and ask again.
+    console.error("ask after payment failed", p.id, e?.message ?? e);
+    await bot.api.editMessageText(md.chatId, md.statusMsgId, `❓ ${md.question}\n💳 Paid (${p.id}). The swarm is busy, retrying automatically.`).catch(() => {});
+    return new Response("ask failed, retry", { status: 503 });
   }
   return new Response("ok", { status: 200 });
 }

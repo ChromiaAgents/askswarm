@@ -19,6 +19,10 @@ export const ASK_CHAIN = Number(process.env.ASK_CHAIN_ID ?? 11155111) as intake.
 const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
 const PRICE_CHR = process.env.CPAY_PRICE_CHR ?? "2.00";
 const MAX_Q = 500;
+// Precheck flags that describe IMD's own infrastructure, not the question. The onchain request is still
+// recorded and answered when their plane recovers, so they must never block a paid or free ask.
+const INFRA = new Set(["chain_unavailable"]);
+const hardBlockers = (b?: { code: string; detail: string }[]) => (b ?? []).filter((x) => !INFRA.has(x.code));
 // Telegram user or chat ids that may ask without paying (house wallet pays IMD). For internal testing
 // on mainnet; empty in production. Find ids with /id.
 const FREE_IDS = new Set((process.env.ASK_FREE_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
@@ -113,8 +117,8 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
   if (raw.length > MAX_Q) return ctx.reply(`Too long, max ${MAX_Q} chars.`);
 
   const chk = await imd.check(raw, PANEL);
-  if (chk.blockers?.length || !chk.request) {
-    const why = chk.blockers?.map((b) => `• ${esc(b.detail)}`).join("\n") || "• no drafted request";
+  if (hardBlockers(chk.blockers).length || !chk.request) {
+    const why = hardBlockers(chk.blockers).map((b) => `• ${esc(b.detail)}`).join("\n") || "• no drafted request";
     return ctx.reply(`The swarm won't take that one:\n${why}`, { parse_mode: "HTML" });
   }
   const r = chk.request;
@@ -176,7 +180,7 @@ export async function markAsked(chatId: number | string, msgId: number, question
 
 export async function askAndMark(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId) {
   const chk = await imd.check(question, PANEL);
-  if (!chk.request || chk.blockers?.length) throw new Error(`check failed: ${chk.blockers?.map((b) => b.code).join("; ")}`);
+  if (!chk.request || hardBlockers(chk.blockers).length) throw new Error(`check failed: ${hardBlockers(chk.blockers).map((b) => b.code).join("; ")}`);
   if (intake.CHAINS[chainId].free) await intake.ensureAllowance(chainId, account());
   const tx = await intake.ask(chainId, account(), chk.request);
   await markAsked(chatId, msgId, question, chainId, tx, chk.request.panelSize);
