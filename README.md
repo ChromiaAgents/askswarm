@@ -11,13 +11,13 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 - **SwarmWager** does the same for one-on-one bets.
 - All three contracts were audited, adapted and deployed by the IMD swarm itself through IMD launches. Every answer flows back into the open [Eval Engine dataset](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes) that the split-risk model learns from.
 
-**Live on Robinhood Chain** (chain id 4663). All three contracts shipped in one IMD launch, [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4), whose audit added two fixes (below). The first deployment on Ethereum stays live and readable; the site, bot and keeper read both chains and put everything new on Robinhood Chain.
+**Live on Robinhood Chain** (chain id 4663). All three contracts shipped in one IMD launch, [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82), whose audit added two fixes (below). The first deployment on Ethereum stays live and readable; the site, bot and keeper read both chains and put everything new on Robinhood Chain.
 
 | contract | Robinhood Chain (current) | Ethereum (first) |
 |---|---|---|
-| AskSwarmRegistry | [`0xf3a79f96…869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) · [#2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) |
-| SwarmMarket | [`0x6c95a849…7cb8`](https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0x4964d5f0…8afa55`](https://etherscan.io/address/0x4964d5f08c71e71d490a9b8a30ed796fc38afa55) · [#2190](https://explorer.imd.fun/launches/01cfb128-811e-4584-8035-85249f0a4884) |
-| SwarmWager | [`0xd237dd75…f96c`](https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0xc0b13031…99bbe6`](https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6) · [#2189](https://explorer.imd.fun/launches/9781dc7e-23dc-4f1c-93f8-4766c016cac7) |
+| AskSwarmRegistry | [`0xf3a79f96…869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) · [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) · [#2099](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0) |
+| SwarmMarket | [`0x6c95a849…7cb8`](https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8) · [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) | [`0x4964d5f0…8afa55`](https://etherscan.io/address/0x4964d5f08c71e71d490a9b8a30ed796fc38afa55) · [#2190](https://explorer.imd.fun/jobs/4f96aab0-b721-49cd-81cd-2e1e8442d3cd) |
+| SwarmWager | [`0xd237dd75…f96c`](https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c) · [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) | [`0xc0b13031…99bbe6`](https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6) · [#2189](https://explorer.imd.fun/jobs/b34bbf68-48c5-4271-af67-49b3bc522e6c) |
 
 What launch #2223 changed (notes: [contracts/ADAPTATION-2223.md](contracts/ADAPTATION-2223.md)):
 
@@ -236,9 +236,9 @@ Paid answers do not stop in the chat. With `REGISTRY_ADDRESS` set, every paid as
 [AskSwarmRegistry](src/AskSwarmRegistry.sol): the contract pays Intake v2
 with itself as callback, verifies the swarm's EIP-712 attestation onchain, and stores the answer by
 question hash. Any contract or client can then read what the swarm attested, free, with the proof.
-The registry was launched through the IMD protocol itself, twice. [Launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa)
+The registry was launched through the IMD protocol itself, twice. [Launch #2088](https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852)
 audited the import, adapted it (constructor call removed, expiry folded into `verified`,
-strict-majority index gate) and deployed. [Launch #2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb)
+strict-majority index gate) and deployed. [Launch #2099](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0)
 started from that accepted code and found more: a replay hole where a settled ask could be
 re-delivered with another request's completion, future-dated attestations, index starvation behind
 an expired answer. It fixed them and added `askAtMost`, `reindex` and `markLost`. Each round's

@@ -4,7 +4,8 @@
 // the index. ponytail: 60s in-memory cache per instance; add KV if the log grows past a few thousand.
 import { parseAbi, hexToString, decodeAbiParameters, type Hex } from "viem";
 import { getLogsChunked, getBlockTs } from "../lib/logs";
-import { chainList, ACTIVE } from "../lib/chains";
+import { chainList, ACTIVE, publicChains } from "../lib/chains";
+import { withImd } from "../lib/imdlinks";
 
 export const maxDuration = 30;
 const abi = parseAbi([
@@ -67,6 +68,7 @@ export async function rows(): Promise<Row[]> {
     out.push(...rs);
   }));
   out.sort((x, y) => y.t - x.t);
+  await withImd(out, (r) => r.chainId, (r) => r.askTx);
   cache = { at: Date.now(), rows: out };
   return out;
 }
@@ -78,7 +80,7 @@ export async function GET(req: Request) {
   let all: Row[];
   try { all = await rows(); } catch (e: any) { return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 502, headers: { "content-type": "application/json" } }); }
   const hit = q ? all.filter((r) => r.question.toLowerCase().includes(q) || (r.answer ?? "").toLowerCase().includes(q)) : all;
-  const body = { active: ACTIVE.id, registries: chainList().flatMap((c) => c.registries.map((r) => ({ chainId: c.id, address: r }))), count: hit.length, verified: all.filter((r) => r.verified).length, rows: hit.slice(0, limit) };
+  const body = { active: ACTIVE.id, chains: publicChains(), registries: chainList().flatMap((c) => c.registries.map((r) => ({ chainId: c.id, address: r }))), count: hit.length, verified: all.filter((r) => r.verified).length, rows: hit.slice(0, limit) };
   return new Response(JSON.stringify(body, (_, v) => (typeof v === "bigint" ? v.toString() : v)), {
     headers: { "content-type": "application/json", "cache-control": "public, max-age=60", "access-control-allow-origin": "*" },
   });

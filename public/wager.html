@@ -74,7 +74,7 @@
 </div>
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex } from "https://esm.sh/viem@2.57.7";
-  import { chainMap, viemChain, pubFor, switchTo, addr as addrLink, badge } from "/chain.js";
+  import { chainMap, viemChain, pubFor, switchTo, addr as addrLink, tx as txLink, badge } from "/chain.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -124,6 +124,14 @@
   const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
 
   // ---- one wager ----
+  // Contracts, the IMD launch that deployed them, each transaction, the swarm job and attestation.
+  function proof(id) {
+    const row = (meta.rows || []).find((r) => String(r.id) === String(id) && Number(r.chainId || 1) === C.id) || {};
+    const L = C.launches?.wager, a = (u, t) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : "";
+    const steps = [row.createTx && a(txLink(C, row.createTx), "created"), row.resolveTx && a(txLink(C, row.resolveTx), "swarm asked"), row.imd?.job && a(row.imd.job, "IMD swarm job"), row.imd?.attestation && a(row.imd.attestation, "signed attestation"), row.settleTx && a(txLink(C, row.settleTx), row.state === "refunded" ? "refunded" : "paid out")].filter(Boolean);
+    return `<div class="meta" style="margin-top:10px;padding:10px 12px;border:2px dashed color-mix(in srgb,currentColor 25%,transparent);border-radius:12px;line-height:1.7"><b>Onchain proof</b><br>${a(addrLink(C, WAGER), "SwarmWager")} · ${a(addrLink(C, REG), "AskSwarmRegistry")} on ${esc(C.name)}${L ? ` · deployed by ${a(L.url, "IMD launch #" + L.n)}` : ""}${steps.length ? "<br>" + steps.join(" · ") : ""}</div>`;
+  }
+
   async function showWager(id) {
     const [w, bodyHex] = await pub.readContract({ address: WAGER, abi: wagerAbi, functionName: "get", args: [BigInt(id)] });
     let body = {}; try { body = JSON.parse(new TextDecoder().decode(Uint8Array.from(bodyHex.slice(2).match(/../g).map((h) => parseInt(h, 16))))); } catch {}
@@ -139,6 +147,7 @@
       : st === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
     $("#view").innerHTML = `<div class="card">${badge(C)} <span class="pill ${st}">${st}</span><p class="q">${esc(body.question)}</p>
       <div class="meta">Yes: ${short(w.yes)} · No: ${short(w.no)} · stake ${formatEther(w.stake)} IMD each<br>join by ${fmt(w.joinBy)} · ask after ${fmt(w.resolveAfter)}${answerLine ? "<br>" + esc(answerLine) : ""}${w.winner !== "0x0000000000000000000000000000000000000000" ? "<br>winner " + short(w.winner) : ""}<br>wager #${id} on ${C.name} · <a href="${addrLink(C, WAGER)}">contract</a> · share: <a href="?id=${id}&c=${C.id}">${location.origin}/wager?id=${id}&c=${C.id}</a></div>
+      ${proof(id)}
       ${action ? `<button class="go" id="act">${esc(action[1])}</button>` : ""}<div class="log" id="vlog"></div></div>`;
     if (!action) return;
     $("#act").onclick = async () => {

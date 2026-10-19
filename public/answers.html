@@ -83,7 +83,7 @@
       const ans = r.status === "answered" ? `<p class="a">${esc(r.answer)}</p>` : r.status === "pending" ? `<p class="a no">…</p>` : `<p class="a no">no consensus</p>`;
       const panel = r.panelSize ? `${r.agreed}/${r.panelSize} agreed (quorum ${r.quorum}) · ${esc(r.answerType)} · valid until ${fmt(r.expiresAt)} · ` : "";
       const ex = EXP[r.chainId || 1];
-      return `<div class="card"><p class="q">${esc(r.question)}</p>${ans}<div class="meta">${badge(r.chainId || 1)} ${tag} ${panel}<a href="${ex}/tx/${r.askTx}">ask tx</a>${r.resultTx ? ` · <a href="${ex}/tx/${r.resultTx}">callback tx</a>` : ""} · asker ${esc(r.asker.slice(0, 8))}…${r.questionHash ? ` · qh ${esc(r.questionHash.slice(0, 10))}…` : ""}</div></div>`;
+      return `<div class="card"><p class="q">${esc(r.question)}</p>${ans}<div class="meta">${badge(r.chainId || 1)} ${tag} ${panel}<a href="${ex}/tx/${r.askTx}">ask tx</a>${r.resultTx ? ` · <a href="${ex}/tx/${r.resultTx}">callback tx</a>` : ""}${r.imd?.job ? ` · <a href="${r.imd.job}">IMD swarm job</a>` : ""}${r.imd?.attestation ? ` · <a href="${r.imd.attestation}">signed attestation</a>` : ""} · asker ${esc(r.asker.slice(0, 8))}…${r.questionHash ? ` · qh ${esc(r.questionHash.slice(0, 10))}…` : ""}</div></div>`;
     }).join("") : `<div class="card">Nothing matches.</div>`;
   }
   fetch("/api/answers?limit=1000").then((r) => r.json()).then((d) => {

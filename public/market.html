@@ -64,6 +64,9 @@
   .final .n{background:var(--pink);color:#1F1A23;flex:1;display:flex;align-items:center;justify-content:flex-end;padding-right:14px}
   .more{margin-top:12px;border-top:2px solid color-mix(in srgb,var(--ink) 12%,transparent);padding-top:10px}
   .more summary{font-size:16px;padding:4px 0}
+  .proof{margin-top:14px;padding:12px 14px;border:2px dashed color-mix(in srgb,var(--ink) 25%,transparent);border-radius:14px;font-size:13px;line-height:1.7}
+  .proof b{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-bottom:2px}
+  .proof a{white-space:nowrap}
   .trow{display:grid;grid-template-columns:1.3fr .6fr 1fr .8fr;gap:6px;font-size:14px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--ink) 10%,transparent)}
   .trow .ty{color:#2e8b2b}.trow .tn{color:#c2185b}.trow a{text-align:right}
   .rules p{font-size:15px;line-height:1.5;margin:8px 0}
@@ -322,6 +325,20 @@
     render();
   }
 
+  // Every step of a market, linked: contracts and the IMD launch that deployed them, then each
+  // transaction, the swarm job on IMD's explorer and the signed attestation.
+  function proof(row, M, REG) {
+    const L = C.launches?.market, X = C.explorerName || "explorer", a = (u, t) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : "";
+    const steps = [
+      row.openTx && a(txLink(C, row.openTx), "opened"),
+      row.resolveTx && a(txLink(C, row.resolveTx), "swarm asked"),
+      row.imd?.job && a(row.imd.job, "IMD swarm job"),
+      row.imd?.attestation && a(row.imd.attestation, "signed attestation"),
+      row.settleTx && a(txLink(C, row.settleTx), "settled"),
+    ].filter(Boolean);
+    return `<div class="proof"><b>Onchain proof</b>${a(addrLink(C, M), "SwarmMarket")} · ${a(addrLink(C, REG), "AskSwarmRegistry")} on ${esc(C.name)} (${X})${L ? ` · deployed by ${a(L.url, "IMD launch #" + L.n)}` : ""}${steps.length ? "<br>" + steps.join(" · ") : ""}</div>`;
+  }
+
   async function showMarket(id) {
     const [m, bodyHex] = await pub.readContract({ address: M, abi: mAbi, functionName: "get", args: [BigInt(id)] });
     let body = {}; try { body = JSON.parse(hexToString(bodyHex)); } catch {}
@@ -353,6 +370,7 @@
       ${["yes", "no", "void"].includes(ph) ? `<button class="cta" id="claim">Claim winnings / refund</button>` : ""}
       <div class="log" id="vlog"></div>
       <div id="chart"></div>
+      ${proof(row, M, REG)}
       <details class="more"><summary>Bets (${row.trades.length})</summary><div id="trades"></div></details>
       <details class="more"><summary>How it settles</summary><div class="rules"></div></details>
     </div>`;

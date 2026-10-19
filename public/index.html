@@ -69,6 +69,13 @@
   .dots i.no{background:var(--pink)}
   .meta{display:block;margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--slate)}
 
+  .onchain{margin:0 0 60px}
+  .onchain h2{font-family:var(--display);font-size:34px;margin:0 0 6px}
+  .onchain .oc{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  @media (max-width:860px){.onchain .oc{grid-template-columns:1fr}}
+  .onchain .oc a.c{display:block;border:2px solid var(--ink);border-radius:18px;padding:14px 16px;text-decoration:none;color:inherit;background:var(--card,transparent)}
+  .onchain .oc a.c b{display:block;font-size:18px}.onchain .oc a.c code{font-size:12px;word-break:break-all;opacity:.8}
+  .onchain p{margin:10px 0 0;font-size:15px;line-height:1.6}
   .strip{margin:60px 0;background:var(--ink);border-radius:28px;color:var(--white);display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:30px 36px}
   @media (max-width:960px){.strip{grid-template-columns:repeat(2,1fr)}}
   .strip .big{font-family:var(--display);font-size:38px;line-height:1}
@@ -145,6 +152,18 @@
     <div><span class="big"><span class="c">0</span> keys</span><small>Chromia Pay is non-custodial; the bot wallet holds only gas and IMD</small></div>
     <div><span class="big">No <span class="c">DB</span></span><small>state lives in the chat message and on chain</small></div>
     <div><span class="big"><span class="c">~4</span>%</span><small>panels end without consensus. Said up front, before you pay</small></div>
+  </section>
+
+
+  <section class="onchain">
+    <h2>Onchain, on Robinhood Chain</h2>
+    <p>All three contracts were audited, fixed and deployed by the IMD swarm in <a href="https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82" target="_blank" rel="noopener">IMD launch #2223</a>. No owner, no admin, no upgrade path.</p>
+    <div class="oc">
+      <a class="c" href="https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012" target="_blank" rel="noopener"><b>AskSwarmRegistry</b><code>0xf3a79f962ec1e75f0087af5491a69dee2a869012</code></a>
+      <a class="c" href="https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8" target="_blank" rel="noopener"><b>SwarmMarket</b><code>0x6c95a84944b05e7de5000caef80a7c487aa57cb8</code></a>
+      <a class="c" href="https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c" target="_blank" rel="noopener"><b>SwarmWager</b><code>0xd237dd7564edb7a026613ebb6da31da0292af96c</code></a>
+    </div>
+    <p>First deployed on Ethereum, still live and readable: <a href="https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd" target="_blank" rel="noopener">registry</a> (<a href="https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0" target="_blank" rel="noopener">launch #2099</a>), <a href="https://etherscan.io/address/0x4964d5f08c71e71d490a9b8a30ed796fc38afa55" target="_blank" rel="noopener">market</a> (<a href="https://explorer.imd.fun/jobs/4f96aab0-b721-49cd-81cd-2e1e8442d3cd" target="_blank" rel="noopener">#2190</a>), <a href="https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6" target="_blank" rel="noopener">wager</a> (<a href="https://explorer.imd.fun/jobs/b34bbf68-48c5-4271-af67-49b3bc522e6c" target="_blank" rel="noopener">#2189</a>). Every answer links its IMD swarm job and signed attestation on <a href="/answers">/answers</a>.</p>
   </section>
 
   <section class="how">

@@ -62,5 +62,11 @@ export const ACTIVE: ChainCfg = want?.registries.length ? want : CHAINS[1];
 export const chainList = () => Object.values(CHAINS);
 export const txUrl = (chainId: number, tx: string) => `${CHAINS[chainId]?.explorer ?? "https://etherscan.io"}/tx/${tx}`;
 export const addrUrl = (chainId: number, a: string) => `${CHAINS[chainId]?.explorer ?? "https://etherscan.io"}/address/${a}`;
-/** Public, browser-safe summary for pages: addresses, explorers, RPCs. */
-export const publicChains = () => chainList().map((c) => ({ id: c.id, name: c.name, short: c.short, rpc: c.id === 1 ? "https://ethereum-rpc.publicnode.com" : c.rpc, explorer: c.explorer, imd: c.imd, registry: c.registries[0] ?? null, registries: c.registries, market: c.market ?? null, wager: c.wager ?? null }));
+/** IMD launch that audited and deployed each contract, as its explorer job page. */
+const J = (id: string, n: number) => ({ n, url: `https://explorer.imd.fun/jobs/${id}` });
+export const LAUNCHES: Record<number, { registry: { n: number; url: string }; market: { n: number; url: string }; wager: { n: number; url: string } }> = {
+  1: { registry: J("1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0", 2099), market: J("4f96aab0-b721-49cd-81cd-2e1e8442d3cd", 2190), wager: J("b34bbf68-48c5-4271-af67-49b3bc522e6c", 2189) },
+  4663: { registry: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223), market: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223), wager: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223) },
+};
+/** Public, browser-safe summary for pages: addresses, explorers, RPCs, launch links. */
+export const publicChains = () => chainList().map((c) => ({ id: c.id, name: c.name, short: c.short, rpc: c.id === 1 ? "https://ethereum-rpc.publicnode.com" : c.rpc, explorer: c.explorer, explorerName: c.id === 1 ? "Etherscan" : "Blockscout", imd: c.imd, registry: c.registries[0] ?? null, registries: c.registries, market: c.market ?? null, wager: c.wager ?? null, launches: LAUNCHES[c.id] }));

@@ -4,6 +4,7 @@ import { parseAbi, hexToString, type Hex } from "viem";
 import { getLogsChunked, getBlockTs } from "../lib/logs";
 import { chainList, publicChains, ACTIVE, type ChainCfg } from "../lib/chains";
 import * as risk from "../lib/risk";
+import { withImd } from "../lib/imdlinks";
 
 export const maxDuration = 30;
 const abi = parseAbi([
@@ -63,6 +64,7 @@ export async function GET() {
       try { if (r.body?.question) voidRiskBps = Math.round(risk.predict({ question: r.body.question, answerType: r.body.answerType ?? "bool", panelSize: r.body.panelSize ?? 15, quorum: r.body.quorum ?? 11, evidence: r.body.evidence }) * 10000); } catch {}
       return { ...r, stakers: r.stakers.size, oddsYesBps: t === 0n ? 5000 : Number((r.yesPool * 10000n) / t), voidRiskBps };
     });
+    await withImd(rows, (r) => r.chainId, (r) => r.resolveTx);
     const body = { active: ACTIVE.id, market: ACTIVE.market ?? null, registry: ACTIVE.registries[0] ?? null, chains: publicChains(), stats: { markets: rows.length, traders, volume, fees }, rows };
     cache = { at: Date.now(), body };
     return json(body);

@@ -4,6 +4,7 @@
 import { parseAbi, hexToString } from "viem";
 import { getLogsChunked } from "../lib/logs";
 import { chainList, publicChains, ACTIVE } from "../lib/chains";
+import { withImd } from "../lib/imdlinks";
 import * as imd from "../packages/imd/src/index";
 
 export const maxDuration = 30;
@@ -44,6 +45,7 @@ async function rows() {
   }));
   // Active chain first, then newest id.
   out.sort((x, y) => (Number(y.chainId === ACTIVE.id) - Number(x.chainId === ACTIVE.id)) || (Number(y.id) - Number(x.id)));
+  await withImd(out, (r) => r.chainId, (r) => r.resolveTx);
   cache = { at: Date.now(), rows: out };
   return out;
 }

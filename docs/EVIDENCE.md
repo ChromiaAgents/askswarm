@@ -2,7 +2,7 @@
 
 ## Robinhood Chain (current)
 
-[IMD launch #2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) deployed all three contracts in one transaction, [`0xf3de9749…`](https://robinhoodchain.blockscout.com/tx/0xf3de97499688c53dffa1970fbd38a65d85413b985f91724f6332be3b4f291566) (block 92654033), after the swarm's audit fixed two findings ([notes](../contracts/ADAPTATION-2223.md)).
+[IMD launch #2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) deployed all three contracts in one transaction, [`0xf3de9749…`](https://robinhoodchain.blockscout.com/tx/0xf3de97499688c53dffa1970fbd38a65d85413b985f91724f6332be3b4f291566) (block 92654033), after the swarm's audit fixed two findings ([notes](../contracts/ADAPTATION-2223.md)).
 
 | contract | address | checked onchain |
 |---|---|---|
