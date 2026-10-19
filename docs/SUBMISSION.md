@@ -19,12 +19,10 @@ other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
 ## Radar blurb (≤1000 chars incl. the full prize wallet address)
 
-All about IMD: judges read this first. Fill {N} {M} {K} {TX} from docs/EVIDENCE.md after markets #1/#2 settle
-(~01:30 UTC 20 Oct) and the evidence batch; with a 66-char tx it is ~971 chars. Replace the zero address with
-Johnson's prize wallet. Contract field: `0xf3a79f962ec1e75f0087af5491a69dee2a869012`. Submit by the evening of
-20 Oct: entries cannot be edited.
+Final, ~900 chars with a real address. Johnson replaces the zero address with the prize wallet and submits
+20 Oct with contract `0xf3a79f962ec1e75f0087af5491a69dee2a869012` and handle `Eval_Engine`. Entries cannot be edited.
 
-AskSwarm makes the IMD oracle usable by people and by other contracts, live on Robinhood Chain. Entered contract: AskSwarmRegistry, audited and deployed by the swarm in IMD launch #2223, source verified on Sourcify. ask() pays 0.5 IMD to Intake v2 with itself as callback; onOracleResult checks the swarm's EIP-712 attestation onchain and stores the answer by questionHash for any contract to read. SwarmMarket and SwarmWager escrow IMD and pay out only on a verified answer, no owner, nobody picks the outcome. Try it in 60s: t.me/askswarm_bot, new players get gas so a first bet is one tap. Proof: {N} asks and {M} bets from {K} wallets on Robinhood; full cycle ask > attestation > settle: robinhoodchain.blockscout.com/tx/{TX}. Live: askswarm-nine.vercel.app. Earlier on Ethereum (#2099): 14 answers, 13 verified. Code: github.com/ChromiaAgents/askswarm. Prize wallet 0x0000000000000000000000000000000000000000
+AskSwarm makes the IMD oracle usable by people and by other contracts, live on Robinhood Chain. Entered contract: AskSwarmRegistry, audited and deployed by the swarm in IMD launch #2223, source verified on Sourcify. ask() pays 0.5 IMD to Intake v2 with itself as callback; onOracleResult checks the swarm's EIP-712 attestation onchain and stores the answer by questionHash for any contract to read. SwarmMarket and SwarmWager escrow IMD and pay out only on a verified answer: no owner, nobody picks the outcome. Try it in 60s: t.me/askswarm_bot. Full cycle on Robinhood, ask > verified attestation > settle > claim: robinhoodchain.blockscout.com/tx/0xd0427fa2c2ec98eb53e2dc420856d3686ac5d9facbd5b0f000ee37e60c8b6b78. Live: askswarm-nine.vercel.app. Earlier on Ethereum (#2099): 14 answers, 13 verified. Code: github.com/ChromiaAgents/askswarm. Prize wallet 0x0000000000000000000000000000000000000000
 
 ## X posts
 
