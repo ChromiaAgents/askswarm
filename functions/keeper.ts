@@ -4,17 +4,30 @@
 // settles anything the swarm has answered and unwinds what can no longer resolve. Every call it
 // makes is permissionless: anyone can run the same loop.
 // ponytail: scans all ids each run; fine below a few hundred markets, index by events beyond that.
-import { createPublicClient, createWalletClient, http, parseAbi, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, parseAbi, erc20Abi, stringToHex, hexToString, parseEther, type Hex } from "viem";
+import * as imd from "../packages/imd/src/index";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 const marketAbi = parseAbi([
   "function count() view returns (uint256)",
   "function RESOLVE_WINDOW() view returns (uint64)",
   "function get(uint256 id) view returns ((address creator,uint64 closeAt,uint64 resolveAfter,uint64 askedAt,uint8 phase,uint96 feeEscrow,uint128 yesPool,uint128 noPool,uint128 winnersShare,bytes32 requestId) m, bytes body)",
   "function resolve(uint256 id)", "function settle(uint256 id)", "function abandon(uint256 id)",
+  "function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)",
+  "function stake(uint256 id, bool yes, uint128 amount)",
+  "event Opened(uint256 indexed id, address indexed creator, uint64 closeAt, uint64 resolveAfter, bytes body)",
 ]);
+const IMD_TOKEN = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
+// Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase price when the round
+// opens, settled by the swarm on that day's close. The house seeds both sides so every round is live.
+const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) => s.trim()).filter(Boolean);
+const SEED = parseEther(process.env.DAILY_SEED_IMD ?? "0.1");
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const dailyQuestion = (pair: string, day: Date, target: number) =>
+  `Was the Coinbase ${pair} daily close on ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()} (UTC) above ${Math.round(target).toLocaleString("en-US")} US dollars?`;
+const dailyPrefix = (pair: string, day: Date) => `Was the Coinbase ${pair} daily close on ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()} (UTC)`;
 const wagerAbi = parseAbi([
   "function count() view returns (uint256)",
   "function get(uint256 id) view returns ((address yes,address no,address creator,uint96 stake,uint96 fee,uint64 joinBy,uint64 resolveAfter,uint64 askedAt,uint8 state,bytes32 requestId,address winner) w, bytes body)",
@@ -44,6 +57,32 @@ export async function runKeeper(): Promise<Act[]> {
   }
 
   const M = process.env.MARKET_ADDRESS as Hex | undefined;
+  if (M && DAILY.length) await ensureDaily(M);
+
+  async function ensureDaily(M: Hex) {
+    const d = new Date(), hour = d.getUTCHours();
+    if (hour >= 18) return; // keep at least ~5h of betting per round
+    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const logs = await pub.getLogs({ address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any, fromBlock: BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300") });
+    const qs = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)).question as string; } catch { return ""; } });
+    for (const pair of DAILY) {
+      if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
+      try {
+        const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" } })).json();
+        const price = Number(t.price); if (!Number.isFinite(price)) continue;
+        const chk = await imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15));
+        if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => b.code !== "not_answerable")) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
+        const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
+        const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
+        await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, 500000000000000000n + 2n * SEED] });
+        const h = await send({ address: M, abi: marketAbi, functionName: "open", args: [stringToHex(JSON.stringify(chk.request)), closeAt, after] });
+        const rc = await pub.getTransactionReceipt({ hash: h });
+        const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase())!.topics[1]!);
+        if (SEED > 0n) { await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, true, SEED] }); await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, false, SEED] }); }
+        acts.push({ contract: "market", id: Number(id), fn: `daily ${pair} > ${Math.round(price)}`, tx: h });
+      } catch (e: any) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
+    }
+  }
   if (M) {
     const n = await pub.readContract({ address: M, abi: marketAbi, functionName: "count" });
     const win = await pub.readContract({ address: M, abi: marketAbi, functionName: "RESOLVE_WINDOW" });
