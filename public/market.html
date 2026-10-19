@@ -343,7 +343,7 @@
       <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets</span></div>
       <h2 class="mt">${esc(T)}</h2>
       ${status}
-      ${canStake ? `<div class="sides"><button class="side y on" data-s="1"><small>YES</small><b>${pct}%</b><span>pays ${fx(k1.yes)}</span></button><button class="side n" data-s="0"><small>NO</small><b>${100 - pct}%</b><span>pays ${fx(k1.no)}</span></button></div>
+      ${canStake ? `<div class="sides"><button class="side y on" data-s="1"><small>YES</small><b>${pct}%</b><span id="py">pays ${fx(k1.yes)}</span></button><button class="side n" data-s="0"><small>NO</small><b>${100 - pct}%</b><span id="pn">pays ${fx(k1.no)}</span></button></div>
         <div class="chips">${[0.1, 0.5, 1, 5].map((v) => `<button data-v="${v}"${v === 0.1 ? ' class="on"' : ""}>${v}</button>`).join("")}<input id="amt" type="number" inputmode="decimal" min="0.01" step="0.01" value="0.1" aria-label="IMD amount"></div>
         <button class="cta" id="cta"></button>` : `<div class="final"><span class="y" style="width:${Math.max(pct, 8)}%">YES ${pct}%</span><span class="n">${100 - pct}% NO</span></div>`}
       ${act ? `<button class="cta alt" id="act">${act[1]}</button>` : ""}
@@ -367,7 +367,7 @@
       let side = true;
       const amt = () => Number($("#amt").value) || 0;
       const label = () => { const a = amt(); if (a <= 0) return "Enter an amount"; const k = mults(m.yesPool, m.noPool, a); const win = a * (side ? k.yes : k.no); return `Bet ${a} IMD on ${side ? "YES" : "NO"} · win ${win.toFixed(3)} IMD`; };
-      const upd = () => { $("#cta").textContent = label(); $("#cta").className = "cta " + (side ? "y" : "n"); if (tg) { tg.MainButton.setParams({ text: label(), color: side ? "#4FCD4C" : "#FF87A6", text_color: "#1F1A23", is_visible: amt() > 0 }); } };
+      const upd = () => { const a = amt(); if (a > 0) { const k = mults(m.yesPool, m.noPool, a); $("#py").textContent = `${a} → ${(a * k.yes).toFixed(3)} IMD`; $("#pn").textContent = `${a} → ${(a * k.no).toFixed(3)} IMD`; } $("#cta").textContent = label(); $("#cta").className = "cta " + (side ? "y" : "n"); if (tg) { tg.MainButton.setParams({ text: label(), color: side ? "#4FCD4C" : "#FF87A6", text_color: "#1F1A23", is_visible: amt() > 0 }); } };
       document.querySelectorAll(".side").forEach((b) => (b.onclick = () => { side = b.dataset.s === "1"; document.querySelectorAll(".side").forEach((x) => x.classList.toggle("on", x === b)); upd(); tg?.HapticFeedback?.selectionChanged(); }));
       document.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => { $("#amt").value = b.dataset.v; document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", x === b)); upd(); }));
       $("#amt").oninput = () => { document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", Number(x.dataset.v) === amt())); upd(); };
@@ -437,7 +437,7 @@
   else if (P.get("id")) {
     // Single market: straight to the market, especially on a phone inside Telegram.
     $("#newbox").hidden = true; $("#list").hidden = true;
-    for (const sel of ["h1", ".sub", "#stats"]) { const el = document.querySelector(".wrap " + sel); if (el) el.hidden = true; }
+    for (const sel of ["h1", ".sub", "#stats"]) { const el = document.querySelector(".wrap " + sel); if (el) el.style.display = "none"; }
     const back = document.createElement("a"); back.href = "/market"; back.className = "meta"; back.textContent = "← all markets"; back.style.display = "inline-block"; back.style.marginBottom = "10px";
     $("#view").before(back);
     await showMarket(P.get("id"));
