@@ -47,7 +47,8 @@ export const CHAINS: Record<number, ChainCfg> = {
     id: 4663, name: "Robinhood Chain", short: "RH", viem: robinhood,
     rpc: env.RH_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com",
     logsRpcs: list(env.RH_LOGS_RPC_URLS ?? env.RH_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com"),
-    logStep: 2_000_000n, explorer: "https://robinhoodchain.blockscout.com",
+    // The RPC allows 2M blocks for one event type but only 100k when a query names several (OR topics).
+    logStep: 100_000n, explorer: "https://robinhoodchain.blockscout.com",
     imd: "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
     registries: list(env.RH_REGISTRY_ADDRESSES ?? env.RH_REGISTRY_ADDRESS),
     market: (env.RH_MARKET_ADDRESS?.toLowerCase() || undefined) as Hex | undefined,

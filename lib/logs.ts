@@ -1,5 +1,5 @@
 // Historical event scans per chain, in chunks the chain's RPCs accept (Ethereum: 5k blocks through
-// archive-capable free RPCs; Robinhood Chain: 2M blocks on its own RPC), with fallback.
+// archive-capable free RPCs; Robinhood Chain: 100k blocks on its own RPC), with fallback.
 // ponytail: sequential chunks; index into KV if a chain's range grows past a few hundred calls.
 import { createPublicClient, fallback, http, type PublicClient } from "viem";
 import type { ChainCfg } from "./chains";
