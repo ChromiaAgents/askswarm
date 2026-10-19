@@ -3,6 +3,7 @@
 //   bun scripts/bridge-eth.ts 0.005           bridge an exact amount
 //   bun scripts/bridge-eth.ts all             bridge everything except gas + a keeper reserve
 //   bun scripts/bridge-eth.ts all --keep 0    bridge everything except gas
+//   bun scripts/bridge-eth.ts all --keep 0 --from demo   same, from the demo wallet (DEMO_PK)
 //   add --dry to print the numbers without sending
 // The reserve (default 0.0005 ETH) pays the keeper's resolve/settle calls for markets still open on
 // Ethereum. Inbox from docs.robinhood.com/chain/protocol-contracts, checked onchain:
@@ -18,10 +19,11 @@ const ROLLUP = "0x23A19d23e89166adedbDcB432518AB01e4272D94" as const;
 const abi = parseAbi(["function depositEth() payable returns (uint256)"]);
 const args = process.argv.slice(2);
 const ki = args.indexOf("--keep");
+const fi = args.indexOf("--from");
 const keep = parseEther(ki >= 0 ? args[ki + 1] : "0.0005");
-const arg = args.find((a, i) => !a.startsWith("--") && (ki < 0 || i !== ki + 1)) ?? "0.005";
+const arg = args.find((a, i) => !a.startsWith("--") && (ki < 0 || i !== ki + 1) && (fi < 0 || i !== fi + 1)) ?? "0.005";
 
-const t = http(process.env.ETH_RPC_URL), account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as Hex);
+const t = http(process.env.ETH_RPC_URL), account = privateKeyToAccount((fi >= 0 && args[fi + 1] === "demo" ? process.env.DEMO_PK : process.env.EVM_PRIVATE_KEY) as Hex);
 const c = createPublicClient({ chain: mainnet, transport: t }), w = createWalletClient({ account, chain: mainnet, transport: t });
 
 const rollupChain = await c.readContract({ address: ROLLUP, abi: parseAbi(["function chainId() view returns (uint256)"]), functionName: "chainId" } as any);
