@@ -17,6 +17,8 @@ First activity, opened by the keeper on its own, each seeded 0.1 IMD per side by
 | #1 | Was the Coinbase ETH-USD daily close on 19 October 2026 (UTC) above 2,404 US dollars? | [`0xfb96eb2d…`](https://robinhoodchain.blockscout.com/tx/0xfb96eb2d80b693cb5586777d29f5e1f888ae4e978a558f18c90ad77495e9b798) |
 | #2 | Was the Coinbase BTC-USD daily close on 19 October 2026 (UTC) above 82,095 US dollars? | [`0x5a844c9e…`](https://robinhoodchain.blockscout.com/tx/0x5a844c9e7bd6d11a9dd8dbb1b0b3813d9f6887cd0e9ebcb51c3b6da561079f19) |
 
+First user bet, recorded for the hands-on video ([docs/askswarm-handson.mp4](askswarm-handson.mp4)): the demo wallet `0xbDFf…8f02` staked 0.1 IMD on YES in market #1 through the live site, [`0xc84498b6…`](https://robinhoodchain.blockscout.com/tx/0xc84498b61b7df4356783892f7cd727dd7cd14304d6156b9aa60d6be6cf788621); odds moved from 50/50 to 67/33.
+
 Funds reached Robinhood Chain through the canonical bridges: ETH through the Arbitrum Delayed Inbox, IMD through its own LayerZero OFT (`scripts/bridge-eth.ts`, `scripts/bridge-imd.ts`).
 
 ## Ethereum (first deployment)
