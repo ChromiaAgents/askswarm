@@ -160,6 +160,7 @@
     $("#draft").textContent = "Checking with the swarm…";
     const r = await fetch("/api/wagers?draft=" + encodeURIComponent(q)).then((r) => r.json());
     if (r.error === "not_yes_no") { $("#draft").textContent = `The swarm reads this as a ${r.answerType} question. Rephrase as yes/no.`; return; }
+    if (r.error === "precheck_unavailable") { $("#draft").textContent = r.message; return; }
     if (r.error) { $("#draft").textContent = "The swarm won't take this: " + (r.blockers || []).map((b) => b.detail).join(" "); return; }
     draft = r.request; $("#draft").textContent = `✓ yes/no · panel ${draft.panelSize}, quorum ${draft.quorum}` + (r.future ? " · answerable only after the deadline; if the swarm refuses then, everyone is refunded" : ""); $("#createBtn").disabled = !WAGER;
   }

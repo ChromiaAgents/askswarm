@@ -56,7 +56,9 @@ export async function GET(req: Request) {
   if (draft) {
     const q = draft.replace(/https?:\/\/\S+/g, "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 500);
     if (!q) return json({ error: "empty" }, 400);
-    const chk = await imd.check(q, Number(process.env.IMD_PANEL_SIZE ?? 15), ACTIVE.id);
+    let chk: Awaited<ReturnType<typeof imd.check>>;
+    try { chk = await imd.check(q, Number(process.env.IMD_PANEL_SIZE ?? 15), ACTIVE.id); }
+    catch { return json({ error: "precheck_unavailable", message: "The swarm's precheck is unreachable right now. Try again in a few minutes." }, 503); }
     // A bet is about something that has not happened yet, so the swarm's precheck says
     // not_answerable today. That is the only blocker we accept: the swarm is asked after the
     // deadline, and if it still refuses then, the contract refunds everyone.
