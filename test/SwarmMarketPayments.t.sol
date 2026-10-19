@@ -152,7 +152,34 @@ contract SwarmMarketPaymentsTest is RegistryTestSupport {
         assertEq(token.allowance(address(market), address(registry)), 0);
     }
 
-    function test_failedRemainderRefundRollsBackAlreadyPaidOracle() public {
+    /// A refused remainder push (the creator is blocked on Robinhood IMD) no longer undoes the ask:
+    /// the market is asked and the remainder is credited to the creator, who withdraws it later.
+    /// Before finding ad6653d75214 the whole resolve reverted, so a blocked creator could stop it.
+    function test_refusedRemainderRefundIsCreditedAndAskStands() public {
+        uint256 id = _funded();
+        intake.setPrice(0.25 ether);
+        vm.warp(_get(id).resolveAfter);
+        _badTransfer(creator, 0.25 ether, 1);
+        market.resolve(id);
+        assertEq(uint8(_get(id).phase), uint8(SwarmMarket.Phase.Asked));
+        assertEq(market.owed(creator), 0.25 ether);
+        assertEq(token.balanceOf(recipient), 0.25 ether);
+        assertEq(token.balanceOf(address(market)), 90.25 ether);
+        assertEq(token.balanceOf(creator), 999.5 ether);
+        assertEq(intake.nonce(), 1);
+        vm.clearMockedCalls();
+        vm.prank(creator);
+        assertEq(market.withdraw(), 0.25 ether);
+        assertEq(market.owed(creator), 0);
+        assertEq(token.balanceOf(creator), 999.75 ether);
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.NothingToClaim.selector);
+        market.withdraw();
+    }
+
+    /// A `false` (or malformed) reply on a third-party push still reverts the whole call: it cannot
+    /// show whether tokens moved, so crediting it could pay twice.
+    function test_malformedRemainderReplyRollsBackAlreadyPaidOracle() public {
         uint256 id = _funded();
         intake.setPrice(0.25 ether);
         vm.warp(_get(id).resolveAfter);
@@ -163,36 +190,39 @@ contract SwarmMarketPaymentsTest is RegistryTestSupport {
         assertEq(_fingerprint(id), before_);
         assertEq(token.balanceOf(address(market)), 90.5 ether);
         assertEq(token.balanceOf(recipient), 0);
-        assertEq(token.balanceOf(address(registry)), 0);
-        assertEq(token.allowance(address(market), address(registry)), 0);
-        assertEq(token.allowance(address(registry), address(intake)), 0);
         assertEq(intake.nonce(), 0);
-        assertEq(registry.asked(), 0);
-        vm.clearMockedCalls();
-        market.resolve(id);
-        assertEq(token.balanceOf(recipient), 0.25 ether);
-        assertEq(token.balanceOf(address(market)), 90 ether);
-        assertEq(token.balanceOf(creator), 999.75 ether);
-        assertEq(intake.nonce(), 1);
+        assertEq(market.owed(creator), 0);
     }
 
     /// forge-config: default.fuzz.runs = 1000
-    function testFuzz_failedTreasuryTransferRollsBackCreatorFee(uint8 mode) public {
+    function testFuzz_treasuryFeeTransferFailure(uint8 mode) public {
         uint256 id = _funded();
         _resolve(id);
         _answer(id, true);
         bytes32 before_ = _fingerprint(id);
         uint256 creatorBefore = token.balanceOf(creator);
-        _badTransfer(treasury, 0.6 ether, mode % 4);
+        mode = mode % 4;
+        _badTransfer(treasury, 0.6 ether, mode);
         (bool ok,) = address(market).call(abi.encodeCall(market.settle, (id)));
-        assertFalse(ok);
-        assertEq(_fingerprint(id), before_);
-        assertEq(token.balanceOf(creator), creatorBefore, "first fee transfer must roll back");
-        assertEq(token.balanceOf(treasury), 0);
-        assertEq(token.balanceOf(address(market)), 90 ether);
-        assertEq(market.claimable(id, alice), 0);
-        vm.clearMockedCalls();
-        market.settle(id);
+        if (mode != 1) {
+            // false or malformed reply: rolled back as before, retry once the token behaves
+            assertFalse(ok);
+            assertEq(_fingerprint(id), before_);
+            assertEq(token.balanceOf(creator), creatorBefore, "first fee transfer must roll back");
+            assertEq(market.claimable(id, alice), 0);
+            vm.clearMockedCalls();
+            market.settle(id);
+            assertEq(token.balanceOf(treasury), 0.6 ether);
+        } else {
+            // reverted (a blocked treasury): settled anyway, the treasury's half is credited
+            assertTrue(ok);
+            assertEq(uint8(_get(id).phase), uint8(SwarmMarket.Phase.Yes));
+            assertEq(market.owed(treasury), 0.6 ether);
+            assertEq(token.balanceOf(treasury), 0);
+            vm.clearMockedCalls();
+            vm.prank(treasury);
+            assertEq(market.withdraw(), 0.6 ether);
+        }
         assertEq(token.balanceOf(creator), creatorBefore + 0.6 ether);
         assertEq(token.balanceOf(treasury), 0.6 ether);
         vm.prank(alice);
@@ -223,24 +253,40 @@ contract SwarmMarketPaymentsTest is RegistryTestSupport {
         assertEq(token.balanceOf(address(market)), 0);
     }
 
-    function test_failedAbandonRefundRollsBackVoidAndAllowsRetry() public {
+    /// A refused escrow refund to the creator no longer blocks the void: stakers claim at once
+    /// and the creator withdraws the escrow later (finding ad6653d75214).
+    function test_refusedAbandonRefundIsCreditedAndStakersClaim() public {
         uint256 id = _funded();
         vm.warp(uint256(_get(id).resolveAfter) + 1 hours + 1);
-        bytes32 before_ = _fingerprint(id);
-        _badTransfer(creator, 0.5 ether, 0);
-        vm.expectRevert(SwarmMarket.TransferFailed.selector);
+        _badTransfer(creator, 0.5 ether, 1);
         market.abandon(id);
-        assertEq(_fingerprint(id), before_);
-        assertEq(market.claimable(id, alice), 0);
-        assertEq(token.balanceOf(address(market)), 90.5 ether);
-        vm.clearMockedCalls();
-        market.abandon(id);
+        assertEq(uint8(_get(id).phase), uint8(SwarmMarket.Phase.Void));
+        assertEq(market.owed(creator), 0.5 ether);
         vm.prank(alice);
         assertEq(market.claim(id), 30 ether);
         vm.prank(bob);
         assertEq(market.claim(id), 60 ether);
+        assertEq(token.balanceOf(address(market)), 0.5 ether);
+        vm.clearMockedCalls();
+        vm.prank(creator);
+        market.withdraw();
         assertEq(token.balanceOf(creator), 1000 ether);
         assertEq(token.balanceOf(address(market)), 0);
+    }
+
+    /// The withdrawal itself is an ordinary push: a failure reverts and keeps the credit.
+    function test_failedWithdrawKeepsCredit() public {
+        uint256 id = _funded();
+        vm.warp(uint256(_get(id).resolveAfter) + 1 hours + 1);
+        _badTransfer(creator, 0.5 ether, 1);
+        market.abandon(id);
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.TransferFailed.selector);
+        market.withdraw();
+        assertEq(market.owed(creator), 0.5 ether);
+        vm.clearMockedCalls();
+        vm.prank(creator);
+        assertEq(market.withdraw(), 0.5 ether);
     }
 
     function test_poolOverflowCannotChargeOrChangeAnUnrelatedMarket() public {

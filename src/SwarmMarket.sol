@@ -21,8 +21,13 @@ import {IAskSwarmRegistry} from "./SwarmWager.sol";
 /// - Paid out per market never exceeds staked: winners' claims plus fees sum to at most the pool.
 /// - Each address claims at most once per market. Claims are pulled; there are no loops.
 /// - A market can always be unwound: void if one side is empty, void if the swarm never answers,
-///   `abandon` if it can never be resolved.
+///   `abandon` if it can never be resolved. `resolveAfter` is at most MAX_TERM from opening, so
+///   that moment always comes.
 /// - The fee escrow pays the swarm at most once, through `resolve`; unspent fee returns to the creator.
+/// - No call that makes stakes claimable depends on a third party's transfer: the creator's escrow
+///   and fee and the treasury's fee are pushed if the token accepts them, else credited to `owed`
+///   for that address to `withdraw` (Robinhood Chain's IMD can block an address).
+/// - Rounding of winners' shares is down; the remainder (under one wei per winner) stays in the contract.
 /// - No owner, no admin, no upgrade path, no ETH. Constructor makes no external call.
 contract SwarmMarket {
     enum Phase {
@@ -52,6 +57,13 @@ contract SwarmMarket {
     /// @notice Time allowed for the swarm's answer after asking, inclusive. A market still pending
     /// after it, or answered with a later issuedAt, voids.
     uint64 public constant ANSWER_WINDOW = 3 days;
+    /// @notice Latest permitted `resolveAfter`, measured from the opening block's timestamp,
+    /// inclusive. Also bounds `closeAt`, since `closeAt <= resolveAfter`. Without it a creator could
+    /// open a market whose `resolveAfter` no chain ever reaches, so neither `resolve` nor `abandon`
+    /// would ever be allowed and every stake would be held forever (audit finding f8ec801b0e44).
+    /// Same bound as SwarmWager.MAX_TERM: at the maximum, `abandon` opens strictly after
+    /// MAX_TERM + RESOLVE_WINDOW.
+    uint64 public constant MAX_TERM = 365 days;
     /// @notice Smallest panel allowed to decide a market; strict majority is also required.
     uint16 public constant MIN_PANEL = 7;
     /// @notice Fee on the losing pool, in basis points, taken only when the swarm settles the market.
@@ -70,6 +82,8 @@ contract SwarmMarket {
     mapping(uint256 id => mapping(address user => uint128)) public yesStake;
     mapping(uint256 id => mapping(address user => uint128)) public noStake;
     mapping(uint256 id => mapping(address user => bool)) public claimed;
+    /// @notice IMD credited to an address whose push the token refused (e.g. a blocked address).
+    mapping(address user => uint256) public owed;
 
     event Opened(uint256 indexed id, address indexed creator, uint64 closeAt, uint64 resolveAfter, bytes body);
     event Staked(uint256 indexed id, address indexed user, bool yes, uint256 amount);
@@ -77,6 +91,8 @@ contract SwarmMarket {
     event Resolving(uint256 indexed id, bytes32 indexed requestId);
     event Settled(uint256 indexed id, Phase phase, uint256 yesPool, uint256 noPool, uint256 fee, uint8 reason);
     event Claimed(uint256 indexed id, address indexed user, uint256 amount);
+    event Owed(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
 
     error ZeroAddress();
     error BadTerms();
@@ -98,8 +114,13 @@ contract SwarmMarket {
     // ---- lifecycle ----
 
     /// @notice Open a market. Pulls the registry's current price from the caller as the fee escrow.
+    /// Terms: `closeAt` in the future, `resolveAfter` at or after `closeAt` and at most MAX_TERM
+    /// from now, so the market can always be resolved or abandoned within a bounded horizon.
     function open(bytes calldata body, uint64 closeAt, uint64 resolveAfter) external returns (uint256 id) {
-        if (body.length == 0 || body.length > MAX_BODY_BYTES || closeAt <= block.timestamp || resolveAfter < closeAt) {
+        if (
+            body.length == 0 || body.length > MAX_BODY_BYTES || closeAt <= block.timestamp || resolveAfter < closeAt
+                || uint256(resolveAfter) > block.timestamp + MAX_TERM
+        ) {
             revert BadTerms();
         }
         uint256 p = REGISTRY.price();
@@ -163,7 +184,7 @@ contract SwarmMarket {
         m.feeEscrow = 0;
         _approve(address(REGISTRY), p);
         m.requestId = REGISTRY.askAtMost(bodyOf[id], p);
-        _push(m.creator, remainder);
+        _pushOrCredit(m.creator, remainder);
         emit Resolving(id, m.requestId);
     }
 
@@ -202,8 +223,8 @@ contract SwarmMarket {
         m.phase = yes ? Phase.Yes : Phase.No;
         m.winnersShare = uint128(losers - fee);
         uint256 toCreator = fee / 2;
-        _push(m.creator, toCreator);
-        _push(TREASURY, fee - toCreator);
+        _pushOrCredit(m.creator, toCreator);
+        _pushOrCredit(TREASURY, fee - toCreator);
         emit Settled(id, m.phase, m.yesPool, m.noPool, fee, 0);
     }
 
@@ -215,6 +236,15 @@ contract SwarmMarket {
         claimed[id][msg.sender] = true;
         _push(msg.sender, amount);
         emit Claimed(id, msg.sender, amount);
+    }
+
+    /// @notice Collect IMD credited to the caller because the token refused a push to it.
+    function withdraw() external returns (uint256 amount) {
+        amount = owed[msg.sender];
+        if (amount == 0) revert NothingToClaim();
+        owed[msg.sender] = 0;
+        _push(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);
     }
 
     // ---- views ----
@@ -247,7 +277,7 @@ contract SwarmMarket {
         m.phase = Phase.Void;
         uint256 fee = m.feeEscrow; // unspent escrow (never asked) goes back to the creator
         m.feeEscrow = 0;
-        _push(m.creator, fee);
+        _pushOrCredit(m.creator, fee);
         emit Settled(id, Phase.Void, m.yesPool, m.noPool, 0, reason);
     }
 
@@ -257,6 +287,21 @@ contract SwarmMarket {
 
     function _push(address to, uint256 amount) private {
         if (amount != 0) _call(abi.encodeWithSelector(0xa9059cbb, to, amount));
+    }
+
+    /// @dev Push to a third party without letting its refusal revert the caller: a failed transfer
+    /// (a revert) is credited to `owed[to]` instead, so other users' funds never wait on that address.
+    function _pushOrCredit(address to, uint256 amount) private {
+        if (amount == 0) return;
+        (bool ok, bytes memory ret) = IMD.call(abi.encodeWithSelector(0xa9059cbb, to, amount));
+        if (ok) {
+            // A reply of `false` or a malformed one cannot show whether tokens moved, so it still
+            // reverts the whole call as `_call` does; only a reverted transfer is known not to have.
+            if (ret.length == 0 || (ret.length == 32 && abi.decode(ret, (uint256)) == 1)) return;
+            revert TransferFailed();
+        }
+        owed[to] += amount;
+        emit Owed(to, amount);
     }
 
     function _approve(address spender, uint256 amount) private {

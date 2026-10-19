@@ -446,6 +446,7 @@ contract SwarmWagerHandler is Test {
         vm.prank(actor);
         wager.cancel(id);
         _credit(m.creator, uint256(m.stake) + m.fee);
+        m.fee = 0; // the contract zeroes the returned escrow (review finding 9bcb33ce3798)
         m.state = SwarmWager.State.Refunded;
         ++cancelled;
         _close(id);
@@ -458,6 +459,7 @@ contract SwarmWagerHandler is Test {
         _credit(m.yes, m.stake);
         _credit(m.no, m.stake);
         _credit(m.creator, m.fee);
+        m.fee = 0; // the contract zeroes the returned escrow (review finding 9bcb33ce3798)
         m.state = SwarmWager.State.Refunded;
         ++abandoned;
         _close(id);

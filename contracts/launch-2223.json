@@ -1,0 +1,29 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {
+      "contract": "AskSwarmRegistry",
+      "constructorArgs": [
+        "0xa43e6f75ee006411f79ac1c84120606c2330de82",
+        "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
+        "0x5598aa9146215bc13eb26f2c692ad1461fd32982"
+      ]
+    },
+    {
+      "contract": "SwarmMarket",
+      "constructorArgs": [
+        "$contract:AskSwarmRegistry",
+        "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
+        "0x571e17b13d8f6492bbc372a160520b20bfda320c"
+      ]
+    },
+    {
+      "contract": "SwarmWager",
+      "constructorArgs": [
+        "$contract:AskSwarmRegistry",
+        "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127"
+      ]
+    }
+  ],
+  "notes": "Deploys the three accepted AskSwarm contracts on Robinhood Chain (chain id 4663) in constructor dependency order, unchanged from the audited Ethereum mainnet launches (#2099 AskSwarmRegistry, #2190 SwarmMarket, #2189 SwarmWager). 1. AskSwarmRegistry (src/AskSwarmRegistry.sol) constructor (intake, imd, signer): Intake v2 0xa43e6f75ee006411f79ac1c84120606c2330de82 and the oracle attester 0x5598aa9146215bc13eb26f2c692ad1461fd32982 are the same on Robinhood Chain; 0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127 is the IMD token on Robinhood Chain. Each ask pulls Intake's current IMD price, approves exactly that amount and forwards it through requestWithFailure with the registry as callback. Attestations are verified under the registry's own EIP-712 domain (chain id 4663, the registry's address, the configured signer), require agreed >= quorum and a strict majority, and are stored by questionHash. 2. SwarmMarket (src/SwarmMarket.sol) constructor (registry, imd, treasury): registry is $contract:AskSwarmRegistry, imd is the same Robinhood Chain IMD token, treasury is AskSwarm's operating wallet 0x571e17b13d8f6492bbc372a160520b20bfda320c as the brief states, which pays for free asks and receives its share of the 2% fee on the losing pool (split creator/treasury). Markets are parimutuel yes/no, settled only from the registry's verified bool answers, with a 1h resolve window and a void (full refund) on any non-answer. 3. SwarmWager (src/SwarmWager.sol) constructor (registry, imd): 1v1 yes/no bets settled from the same registry answers. All three constructors are nonpayable, make no external calls and create no child contract, so they deploy on an empty chain through one factory call. None of the contracts has an owner, admin, pauser, upgrade path, proxy, DELEGATECALL, SELFDESTRUCT, initialization call or ETH handling; all dependencies are immutable and cannot be rotated after deployment. No token, pool, $owner argument, reward distributor or ETH funding is part of this launch. Intake and its writer remain trusted to pair pending requests with attestations; readers must check answer freshness and panel strength."
+}

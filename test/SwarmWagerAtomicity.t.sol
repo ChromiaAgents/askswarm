@@ -121,6 +121,28 @@ contract SwarmWagerAtomicityTest is Test {
         bytes32 beforeState = _snapshot(id);
         vm.prank(actor);
         (bool success,) = address(wager).call(data);
+        // A reverted refund or remainder leg is credited to its recipient rather than undoing the
+        // call (finding d4e9fc2df017): the call succeeds and the recipient withdraws later.
+        bool credited = mode == WagerFaultToken.Reply.Revert && ((op == 3 && leg % 5 == 4) || op == 5 || op == 7);
+        if (credited) {
+            assertTrue(success, "a reverted refund leg blocked the call");
+            if (sentinel != 0) assertEq(_record(sentinel), sentinelBefore);
+            token.configure(address(0), bytes4(0), 0, WagerFaultToken.Reply.True);
+            // The fault token's call counter rolls back with the reverted leg, so later legs of the
+            // same call may fault too; each is credited and the reconciliation below checks the sum.
+            assertGt(wager.owed(alice) + wager.owed(bob), 0, "no leg was credited");
+            if (wager.owed(alice) != 0) {
+                vm.prank(alice);
+                wager.withdraw();
+            }
+            if (wager.owed(bob) != 0) {
+                vm.prank(bob);
+                wager.withdraw();
+            }
+            assertEq(wager.owed(alice) + wager.owed(bob), 0);
+            _exitAndReconcile(op, id, stake, sentinel);
+            return;
+        }
         assertFalse(success, "an unsuccessful token operation was accepted");
         assertEq(_snapshot(id), beforeState, "failure partially changed state, balances, or allowances");
         assertEq(token.calls(), 0, "failed token side effects survived");
@@ -132,6 +154,10 @@ contract SwarmWagerAtomicityTest is Test {
         assertTrue(success, "same operation was not retryable after token recovery");
         if (sentinel != 0) assertEq(_record(sentinel), sentinelBefore);
 
+        _exitAndReconcile(op, id, stake, sentinel);
+    }
+
+    function _exitAndReconcile(uint8 op, uint256 id, uint96 stake, uint256 sentinel) private {
         // Bring the target to an exit and account for each participant independently.
         SwarmWager.Wager memory w = _w(id);
         uint256 spent = op == 3 ? FEE / 2 : op >= 6 ? FEE : 0;

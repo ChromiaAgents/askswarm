@@ -56,6 +56,9 @@ interface IAskSwarmRegistry {
 /// - The fee is paid to the swarm at most once per wager, and only through `resolve`.
 /// - A wager can always be unwound: unmatched by `cancel`, unresolvable by `abandon`, unanswered by
 ///   `settle` after `ANSWER_WINDOW`.
+/// - One party's refund never depends on another's transfer: refunds and the creator's fee are
+///   pushed if the token accepts them, else credited to `owed` for that address to `withdraw`
+///   (Robinhood Chain's IMD can block an address).
 /// - No owner, no admin, no upgrade path, no ETH. Constructor makes no external call.
 contract SwarmWager {
     enum State {
@@ -85,6 +88,8 @@ contract SwarmWager {
     uint64 public constant ANSWER_WINDOW = 3 days;
     /// @notice Latest permitted resolution time, measured from creation. Also bounds `joinBy`.
     uint64 public constant MAX_TERM = 365 days;
+    /// @notice Largest body Intake accepts; a longer one could never be asked.
+    uint256 public constant MAX_BODY_BYTES = 16_384;
     /// @notice Answer type the registry reports for a bool question.
     uint8 internal constant BOOL = 0;
 
@@ -94,6 +99,8 @@ contract SwarmWager {
     uint256 public count;
     mapping(uint256 id => Wager) public wagers;
     mapping(uint256 id => bytes body) public bodyOf;
+    /// @notice IMD credited to an address whose push the token refused (e.g. a blocked address).
+    mapping(address user => uint256) public owed;
 
     event Created(
         uint256 indexed id,
@@ -109,6 +116,8 @@ contract SwarmWager {
     event Resolving(uint256 indexed id, bytes32 indexed requestId);
     event Paid(uint256 indexed id, address indexed winner, bool answer, uint256 amount);
     event Refunded(uint256 indexed id, uint8 reason);
+    event Owed(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
 
     error ZeroAddress();
     error BadTerms();
@@ -119,6 +128,7 @@ contract SwarmWager {
     error NotCreator();
     error StillPending();
     error TransferFailed();
+    error NothingOwed();
 
     constructor(address registry, address imd) {
         if (registry == address(0) || imd == address(0)) revert ZeroAddress();
@@ -136,8 +146,8 @@ contract SwarmWager {
         returns (uint256 id)
     {
         if (
-            body.length == 0 || stake == 0 || joinBy <= block.timestamp || resolveAfter < joinBy
-                || uint256(resolveAfter) > block.timestamp + MAX_TERM
+            body.length == 0 || body.length > MAX_BODY_BYTES || stake == 0 || joinBy <= block.timestamp
+                || resolveAfter < joinBy || uint256(resolveAfter) > block.timestamp + MAX_TERM
         ) revert BadTerms();
         uint256 p = REGISTRY.price();
         if (p == 0 || p > type(uint96).max) revert BadTerms();
@@ -179,7 +189,9 @@ contract SwarmWager {
         if (w.state != State.Open) revert WrongState(w.state);
         if (msg.sender != w.creator && block.timestamp <= w.joinBy) revert NotCreator();
         w.state = State.Refunded;
-        _push(w.creator, uint256(w.stake) + w.fee);
+        uint256 fee = w.fee;
+        w.fee = 0;
+        _push(w.creator, uint256(w.stake) + fee);
         emit Refunded(id, 0);
     }
 
@@ -212,7 +224,7 @@ contract SwarmWager {
         _approve(address(REGISTRY), p);
         bytes32 rid = REGISTRY.askAtMost(bodyOf[id], p);
         w.requestId = rid;
-        _push(w.creator, remainder);
+        _pushOrCredit(w.creator, remainder);
         emit Resolving(id, rid);
     }
 
@@ -223,9 +235,11 @@ contract SwarmWager {
         if (w.state != State.Matched) revert WrongState(w.state);
         if (block.timestamp <= uint256(w.resolveAfter) + ANSWER_WINDOW) revert TooEarly();
         w.state = State.Refunded;
-        _push(w.yes, w.stake);
-        _push(w.no, w.stake);
-        _push(w.creator, w.fee);
+        uint256 fee = w.fee;
+        w.fee = 0;
+        _pushOrCredit(w.yes, w.stake);
+        _pushOrCredit(w.no, w.stake);
+        _pushOrCredit(w.creator, fee);
         emit Refunded(id, 1);
     }
 
@@ -258,6 +272,15 @@ contract SwarmWager {
         emit Paid(id, winner, yes, pot);
     }
 
+    /// @notice Collect IMD credited to the caller because the token refused a push to it.
+    function withdraw() external returns (uint256 amount) {
+        amount = owed[msg.sender];
+        if (amount == 0) revert NothingOwed();
+        owed[msg.sender] = 0;
+        _push(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);
+    }
+
     // ---- views ----
 
     function get(uint256 id) external view returns (Wager memory w, bytes memory body) {
@@ -268,8 +291,8 @@ contract SwarmWager {
 
     function _refund(Wager storage w, uint256 id, uint8 reason) private {
         w.state = State.Refunded;
-        _push(w.yes, w.stake);
-        _push(w.no, w.stake);
+        _pushOrCredit(w.yes, w.stake);
+        _pushOrCredit(w.no, w.stake);
         emit Refunded(id, reason);
     }
 
@@ -279,6 +302,21 @@ contract SwarmWager {
 
     function _push(address to, uint256 amount) private {
         if (amount != 0) _call(abi.encodeWithSelector(0xa9059cbb, to, amount));
+    }
+
+    /// @dev Push to a party without letting its refusal revert the caller: a failed transfer
+    /// (a revert) is credited to `owed[to]` instead, so the other party's refund never waits on that address.
+    function _pushOrCredit(address to, uint256 amount) private {
+        if (amount == 0) return;
+        (bool ok, bytes memory ret) = IMD.call(abi.encodeWithSelector(0xa9059cbb, to, amount));
+        if (ok) {
+            // A reply of `false` or a malformed one cannot show whether tokens moved, so it still
+            // reverts the whole call as `_call` does; only a reverted transfer is known not to have.
+            if (ret.length == 0 || (ret.length == 32 && abi.decode(ret, (uint256)) == 1)) return;
+            revert TransferFailed();
+        }
+        owed[to] += amount;
+        emit Owed(to, amount);
     }
 
     function _approve(address spender, uint256 amount) private {

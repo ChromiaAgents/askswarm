@@ -50,15 +50,20 @@ contract SwarmWagerBoundariesTest is RegistryTestSupport {
         _assertRestored(0);
     }
 
-    function test_oversizedBodyRejectedByTransportLeavesFeeAndStakesRefundable() public {
-        uint256 id = _match(false, STAKE, new bytes(16_385));
-        vm.warp(START + 2);
-        vm.expectRevert(RecordingIntake.BodyTooLong.selector);
-        wager.resolve(id);
-        _assertUnasked(id);
-        vm.warp(START + 2 + 3 days + 1);
-        wager.abandon(id);
-        _assertRestored(0);
+    /// A body over Intake's 16 KiB cap could be created and joined but never asked, locking the
+    /// counterparty until abandon (review finding 8510f4de65d9). It is now refused at create, as
+    /// SwarmMarket.open refuses it; exactly MAX_BODY_BYTES is still accepted.
+    function test_oversizedBodyRejectedAtCreate() public {
+        uint256 before_ = token.balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert(SwarmWager.BadTerms.selector);
+        wager.create(new bytes(16_385), false, STAKE, uint64(START + 1), uint64(START + 2));
+        assertEq(token.balanceOf(alice), before_);
+        assertEq(wager.count(), 0);
+        assertEq(wager.MAX_BODY_BYTES(), 16_384);
+        vm.prank(alice);
+        wager.create(new bytes(16_384), false, STAKE, uint64(START + 1), uint64(START + 2));
+        assertEq(wager.count(), 1);
     }
 
     function test_maximumStakeAndMaximumFeeDoNotNarrowCombinedAmounts() public {

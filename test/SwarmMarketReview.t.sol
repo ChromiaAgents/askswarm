@@ -5,6 +5,7 @@ import {RegistryTestSupport, PaymentToken} from "./helpers/RegistryTestSupport.s
 import {AskSwarmRegistry} from "src/AskSwarmRegistry.sol";
 import {OracleAttestation} from "src/IIntake.sol";
 import {SwarmMarket} from "src/SwarmMarket.sol";
+import {SwarmWager} from "src/SwarmWager.sol";
 
 /// Uses the actual registry and its signed, 200k-gas callback path with the existing offline
 /// token/Intake model. Opaque bodies are transport fixtures, not production oracle questions.
@@ -608,5 +609,114 @@ contract SwarmMarketReviewTest is RegistryTestSupport {
         assertEq(amount, owed);
         assertEq(token.balanceOf(user), before + owed);
         assertEq(market.claimable(id, user), 0);
+    }
+
+    // ---- finding f8ec801b0e44 (Robinhood Chain launch): resolveAfter beyond any reachable time ----
+
+    function wagerMaxTerm() internal returns (uint64) {
+        return new SwarmWager(address(registry), address(token)).MAX_TERM();
+    }
+
+    /// `open` used to accept `resolveAfter = type(uint64).max`: stakes closed at `closeAt`, and
+    /// `resolve` and `abandon` both reverted TooEarly at every timestamp a chain will ever produce.
+    /// Now the terms are refused before any token moves, the same bound SwarmWager applies.
+    function test_openRejectsResolveAfterBeyondMaxTerm() public {
+        uint64 now_ = uint64(vm.getBlockTimestamp());
+        uint256 before = token.balanceOf(creator);
+        uint64 maxTerm = market.MAX_TERM();
+        assertEq(maxTerm, 365 days);
+        assertEq(maxTerm, wagerMaxTerm(), "same horizon as SwarmWager");
+
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.BadTerms.selector);
+        market.open("opaque market body", now_ + 1 hours, type(uint64).max);
+
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.BadTerms.selector);
+        market.open("opaque market body", now_ + 1 hours, now_ + maxTerm + 1);
+
+        // closeAt is bounded through resolveAfter >= closeAt.
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.BadTerms.selector);
+        market.open("opaque market body", type(uint64).max, type(uint64).max);
+
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.BadTerms.selector);
+        market.open("opaque market body", now_ + maxTerm + 1, now_ + maxTerm + 1);
+
+        assertEq(market.count(), 0, "no market opened");
+        assertEq(token.balanceOf(creator), before, "a refused open pulls nothing");
+        assertEq(token.balanceOf(address(market)), 0);
+    }
+
+    /// The limit is inclusive and relative to the opening block: exactly MAX_TERM is accepted, and
+    /// the market it opens can still be abandoned once its resolve window has passed.
+    function test_openAcceptsExactMaxTermAndMarketStillUnwinds() public {
+        uint64 now_ = uint64(vm.getBlockTimestamp());
+        uint64 limit = now_ + market.MAX_TERM();
+        vm.prank(creator);
+        uint256 id = market.open("opaque market body", now_ + 1 hours, limit);
+        assertEq(_market(id).resolveAfter, limit);
+        _stake(id, alice, true, 30 ether);
+        _stake(id, bob, false, 60 ether);
+
+        // Still Open and locked through the whole term and the resolve window.
+        vm.warp(uint256(limit) + market.RESOLVE_WINDOW());
+        vm.expectRevert(SwarmMarket.TooEarly.selector);
+        market.abandon(id);
+        market.resolve(id); // the registry is reachable here, so resolve is the normal exit
+        assertEq(uint8(_market(id).phase), uint8(SwarmMarket.Phase.Asked));
+    }
+
+    function test_maxTermMarketAbandonsAfterResolveWindow() public {
+        uint64 now_ = uint64(vm.getBlockTimestamp());
+        uint64 limit = now_ + market.MAX_TERM();
+        vm.prank(creator);
+        uint256 id = market.open("opaque market body", limit, limit);
+        _stake(id, alice, true, 30 ether);
+        _stake(id, bob, false, 60 ether);
+        vm.warp(uint256(limit) + market.RESOLVE_WINDOW() + 1);
+        market.abandon(id);
+        _assertVoid(id);
+        assertEq(_claimIfOwed(id, alice), 30 ether);
+        assertEq(_claimIfOwed(id, bob), 60 ether);
+        assertEq(token.balanceOf(address(market)), 0, "every token left the contract");
+        assertEq(token.balanceOf(creator), FUNDS, "unspent escrow returned");
+    }
+
+    /// Every pair of terms `open` accepts can be unwound by anyone no later than
+    /// MAX_TERM + RESOLVE_WINDOW + 1 after opening, whatever the registry does: the horizon is
+    /// bounded by the contract, not by the creator.
+    function testFuzz_acceptedTermsAlwaysUnwindWithinHorizon(uint64 closeDelay, uint64 resolveDelay, uint8 priceMode)
+        public
+    {
+        uint64 now_ = uint64(vm.getBlockTimestamp());
+        closeDelay = uint64(bound(closeDelay, 1, market.MAX_TERM()));
+        resolveDelay = uint64(bound(resolveDelay, closeDelay, market.MAX_TERM()));
+        vm.prank(creator);
+        uint256 id = market.open("opaque market body", now_ + closeDelay, now_ + resolveDelay);
+        _stake(id, alice, true, 30 ether);
+        _stake(id, bob, false, 60 ether);
+        // The registry may be unreachable, retired or repriced: abandon must not depend on it.
+        if (priceMode % 3 == 1) intake.setPrice(0);
+        if (priceMode % 3 == 2) intake.setRejection(0, true);
+
+        uint256 horizon = uint256(now_) + market.MAX_TERM() + market.RESOLVE_WINDOW() + 1;
+        vm.warp(horizon);
+        market.abandon(id);
+        _assertVoid(id);
+        assertEq(_claimIfOwed(id, alice) + _claimIfOwed(id, bob), 90 ether);
+        assertEq(token.balanceOf(address(market)), 0);
+    }
+
+    function testFuzz_openRejectsEveryResolveAfterPastMaxTerm(uint64 resolveAfter, uint64 closeDelay) public {
+        uint64 now_ = uint64(vm.getBlockTimestamp());
+        resolveAfter = uint64(bound(resolveAfter, uint256(now_) + market.MAX_TERM() + 1, type(uint64).max));
+        uint64 closeAt = uint64(bound(closeDelay, uint256(now_) + 1, resolveAfter));
+        vm.prank(creator);
+        vm.expectRevert(SwarmMarket.BadTerms.selector);
+        market.open("opaque market body", closeAt, resolveAfter);
+        assertEq(market.count(), 0);
+        assertEq(token.balanceOf(creator), FUNDS);
     }
 }

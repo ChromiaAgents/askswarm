@@ -81,3 +81,18 @@ Reported in `.imd-findings.json`, not asserted:
 - The callback's gas cost is above the brief's figure but still under the stipend (info).
 
 The live-fork run against Intake v2 and IMD on Ethereum is still owed for this pass. Everything here runs offline against the transport model.
+
+## Robinhood Chain launch: the three contracts as one system
+
+- `RobinhoodSystemInvariant.t.sol` deploys AskSwarmRegistry, SwarmMarket and SwarmWager in one call (CREATE2, registry first, chain 4663) and drives all three through one shared registry: 128 sequences of 80 calls from four actors over open/stake/top-up/resolve/abandon/settle/claim, create/join/cancel/top-up/resolve/abandon/settle, writer deliveries in eleven modes (yes, no, panel of 5, issued near the deadline, non-canonical bool, wrong answer type, wrong key, no strict majority, refused, no result, stranded then `markLost`), price changes, time jumps, and whole-lifecycle steps so decided markets appear in every run. Reverts fail the campaign; each expected revert is asserted with its error.
+- Each settlement is checked against the outcome computed from what was delivered (decided only by a verified canonical bool from a strict majority, panel >= 7 and issued by the deadline for the market; any verified strict-majority bool for the wager), including the 2% fee split creator/treasury and the parimutuel claim rule written from ghost stakes.
+- Invariants: each consumer holds exactly what it owes from ghost accounting (escrow + open stakes - fees - claims); claims never exceed what a market holds (dust < 1 wei per staker); finished markets and wagers never reopen; the registry keeps no IMD or allowance, the consumers leave no allowance; one Intake payment per resolve; token supply conserved.
+- SwarmWager now zeroes `fee` on cancel/abandon (reported last round). The invariant asserts that every finished wager has a zero fee escrow.
+- `BlockedPartyInvariant.t.sol` runs the real registry, market and wager on a stand-in for Robinhood Chain's blockable IMD. It does 96 sequences of 64 calls, and the four actors and the treasury are blocked and unblocked at random between lifecycle calls, deliveries and `withdraw`. Each push is predicted from the brief:
+  - A push to a third party (creator remainder, fee halves, abandon/void/refund stakes) lands, or is credited to `owed` while the receiver is blocked.
+  - The caller's own payout (claim, a paid wager's pot, cancel, withdraw) reverts and stays open while the caller is blocked.
+  - Pulls from a blocked address revert.
+  - Invariants: per-party `owed` equals the prediction on both contracts. Each contract's balance equals its open books plus all `owed`. Supply is conserved, finished markets and wagers never reopen, and Intake is paid once per ask.
+  - `test_handlerReachesCreditsAndWithdrawals` and a probe of the random campaign both show the credit, blocked-withdraw, withdraw, blocked-claim, blocked-winner and settle-past-blocked-party paths are reached.
+- Reported in `.imd-findings.json` (info): SwarmWager does not apply SwarmMarket's MIN_PANEL or issuedAt deadline. SwarmMarket's rounding dust cannot be recovered. A blocked winner's own payout waits until the token unblocks it.
+- Still owed: a fork run against Intake v2 and IMD on Robinhood Chain (no RPC here).
