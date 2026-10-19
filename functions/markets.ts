@@ -47,12 +47,15 @@ async function chainRows(c: ChainCfg) {
   return [...m.values()];
 }
 
+/** Every market on every chain, unsorted, raw (Set of stakers, bigint pools). Also feeds the dataset. */
+export const marketRows = async () => (await Promise.all(chainList().filter((c) => c.market).map((c) =>
+  chainRows(c).catch((e) => { console.error("[markets]", c.name, e?.shortMessage ?? e?.message); return [] as any[]; })))).flat();
+
 let cache: { at: number; body: any } | null = null;
 export async function GET() {
   if (cache && Date.now() - cache.at < 60_000) return json(cache.body);
   try {
-    const all = (await Promise.all(chainList().filter((c) => c.market).map((c) =>
-      chainRows(c).catch((e) => { console.error("[markets]", c.name, e?.shortMessage ?? e?.message); return [] as any[]; })))).flat();
+    const all = await marketRows();
     const traders = new Set(all.flatMap((r) => [...(r.stakers as Set<string>)])).size;
     let fees = 0n, volume = 0n;
     for (const r of all) { fees += r.fee; volume += r.yesPool + r.noPool; }

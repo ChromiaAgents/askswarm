@@ -299,6 +299,9 @@ cron (`api/hf-sync`, or `bun scripts/hf-sync.ts`) pushes every terminal registry
 `contrib/askswarm/answers.jsonl` in that dataset: question, body, decoded answer, panel, agreement,
 onchain verification, txs, with `label` in the dataset's own 0 attested / 1 disagreed convention.
 Live: [contrib/askswarm/answers.jsonl](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes/blob/main/contrib/askswarm/answers.jsonl).
+Bets go in too: `contrib/askswarm/markets.jsonl` has one row per SwarmMarket market on every chain, with
+the crowd's implied odds at close, pools, bettors and the swarm's settled outcome, so you can measure how
+well IMD-staked crowds predict what the swarm then verifies.
 
 ## Pricing
 
