@@ -40,7 +40,7 @@
   .log{font:13px/1.6 "NB Mono",monospace;white-space:pre-wrap;margin-top:10px}
   .err{color:#c2185b}.ok{color:#2e8b2b}
   details summary{cursor:pointer;font-weight:700}
-  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin:0 0 14px}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin:0 0 14px}
   @media (max-width:760px){.grid2{grid-template-columns:1fr}}
   .feed div,.lb div{display:flex;justify-content:space-between;gap:10px;font:13px/1.9 "NB Mono",monospace;border-bottom:1px solid color-mix(in srgb,var(--ink) 10%,transparent)}
   .feed b.y{color:#2e8b2b}.feed b.n{color:#c2185b}
@@ -369,10 +369,10 @@
   if (!P.get("id") && (act.length || lb.length)) {
     const g = document.createElement("div"); g.className = "grid2";
     g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}">#${x.r.id}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
-      <div class="card"><h4>Leaderboard</h4><div class="lb">${lb.map((x, i) => `<div><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span>${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD · vol ${x.vol.toFixed(2)}</span></div>`).join("")}</div></div>`;
+      <div class="card"><h4>Leaderboard</h4><div class="lb">${lb.map((x, i) => `<div title="volume ${x.vol.toFixed(2)} IMD"><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span style="color:${x.pnl >= 0 ? "#2e8b2b" : "#c2185b"}">${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD</span></div>`).join("")}</div></div>`;
     $("#list").before(g);
   }
-  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool); return ` · <span class="mult">1 IMD on YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
+  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool, 0.01); return ` · <span class="mult">YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
   if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;
   else if (P.get("id")) { $("#newbox").hidden = true; $("#list").hidden = true; await showMarket(P.get("id")); }
   else if (P.get("q")) { $("#newbox").open = true; $("#q").value = P.get("q"); checkQ(); }
