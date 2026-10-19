@@ -2,6 +2,7 @@
 // ponytail: 60s cache per instance, events are the index.
 import { createPublicClient, http, parseAbi, hexToString, type Hex } from "viem";
 import { mainnet } from "viem/chains";
+import { getLogsChunked } from "../lib/logs";
 
 export const maxDuration = 30;
 const MARKET = (process.env.MARKET_ADDRESS ?? "").toLowerCase() as Hex;
@@ -25,7 +26,7 @@ export async function GET() {
   if (!MARKET) return json({ market: null, rows: [] });
   try {
     const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
-    const logs = await pub.getLogs({ address: MARKET, events: abi, fromBlock: FROM_BLOCK, toBlock: await pub.getBlockNumber() });
+    const logs = await getLogsChunked(pub as any, { address: MARKET, events: abi }, FROM_BLOCK);
     const m = new Map<string, any>();
     let fees = 0n, volume = 0n;
     // Timestamps for the chart: one getBlock per distinct block (few per market).

@@ -4,6 +4,7 @@
 // the index. ponytail: 60s in-memory cache per instance; add KV if the log grows past a few thousand.
 import { createPublicClient, http, parseAbi, hexToString, decodeAbiParameters, type Hex } from "viem";
 import { mainnet } from "viem/chains";
+import { getLogsChunked } from "../lib/logs";
 
 export const maxDuration = 30;
 const REGISTRIES = (process.env.REGISTRY_ADDRESSES ?? process.env.REGISTRY_ADDRESS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) as Hex[];
@@ -42,8 +43,7 @@ export async function rows(): Promise<Row[]> {
   if (cache && Date.now() - cache.at < 60_000) return cache.rows;
   if (!REGISTRIES.length) return [];
   const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
-  const toBlock = await pub.getBlockNumber();
-  const logs = await pub.getLogs({ address: REGISTRIES, events: abi, fromBlock: FROM_BLOCK, toBlock });
+  const logs = await getLogsChunked(pub as any, { address: REGISTRIES, events: abi }, FROM_BLOCK);
   const byId = new Map<Hex, Row>();
   for (const l of logs as any[]) {
     const a = l.args;

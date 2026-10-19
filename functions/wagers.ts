@@ -3,6 +3,7 @@
 // ponytail: 60s cache per instance, events are the index.
 import { createPublicClient, http, parseAbi, hexToString, type Hex } from "viem";
 import { mainnet } from "viem/chains";
+import { getLogsChunked } from "../lib/logs";
 import * as imd from "../packages/imd/src/index";
 
 export const maxDuration = 30;
@@ -25,7 +26,7 @@ async function rows() {
   if (cache && Date.now() - cache.at < 60_000) return cache.rows;
   if (!WAGER) return [];
   const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
-  const logs = await pub.getLogs({ address: WAGER, events: abi, fromBlock: FROM_BLOCK, toBlock: await pub.getBlockNumber() });
+  const logs = await getLogsChunked(pub as any, { address: WAGER, events: abi }, FROM_BLOCK);
   const m = new Map<string, any>();
   for (const l of logs as any[]) {
     const a = l.args, id = String(a.id);

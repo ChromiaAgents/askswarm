@@ -7,6 +7,7 @@
 import { createPublicClient, createWalletClient, http, parseAbi, erc20Abi, stringToHex, hexToString, parseEther, type Hex } from "viem";
 import * as imd from "../packages/imd/src/index";
 import { announceOpened, announceSettled } from "../lib/announce";
+import { getLogsChunked } from "../lib/logs";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 
@@ -67,7 +68,7 @@ export async function runKeeper(): Promise<Act[]> {
     const d = new Date(), hour = d.getUTCHours();
     if (hour >= 18) return; // keep at least ~5h of betting per round
     const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    const logs = await pub.getLogs({ address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any, fromBlock: BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300") });
+    const logs = await getLogsChunked(pub as any, { address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any }, BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300"));
     const qs = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)).question as string; } catch { return ""; } });
     for (const pair of DAILY) {
       if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
