@@ -156,18 +156,19 @@
     return p;
   }
   function stepify(h, end) { const o = []; h.forEach((q, i) => { if (i) o.push({ t: q.t - 0.001, v: h[i - 1].v }); o.push(q); }); o.push({ t: end, v: h[h.length - 1].v }); return o; }
-  function led(el, { points, target, fmtV, color, step }) {
+  function led(el, { points, target, fmtV, color, step, range }) {
     const W = 710, H = 300, R = 72, B = 24, T = 14, iw = W - R;
     if (!points.length) { el.innerHTML = `<p class="meta">No data yet.</p>`; return; }
     const t0 = points[0].t, t1 = points[points.length - 1].t;
     let lo = Math.min(...points.map((p) => p.v)), hi = Math.max(...points.map((p) => p.v));
     if (target != null) { lo = Math.min(lo, target); hi = Math.max(hi, target); }
     if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
-    const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+    let pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+    if (range) { [lo, hi] = range; pad = 0; }
     const X = (t) => ((t - t0) / Math.max(t1 - t0, 1)) * iw, Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
     const xy = points.map((p) => [X(p.t), Y(p.v)]);
     const path = step ? "M" + xy.map((q) => q.join(",")).join("L") : smooth(xy);
-    const ticks = [0, 1, 2, 3].map((i) => lo + pad + ((hi - lo - 2 * pad) * i) / 3);
+    const ticks = range ? [0, 25, 50, 75, 100] : [0, 1, 2, 3].map((i) => lo + pad + ((hi - lo - 2 * pad) * i) / 3);
     const span = t1 - t0, xf = (t) => { const d = new Date(t * 1000); return span < 86400 ? d.toISOString().slice(11, 16) : d.toISOString().slice(5, 10); };
     const xt = [0, 0.25, 0.5, 0.75, 1].map((f) => t0 + f * span);
     const id = "c" + Math.random().toString(36).slice(2, 7), last = xy[xy.length - 1];
@@ -217,7 +218,7 @@
         box.querySelector(".cbox").style.setProperty("--line", "#4FCD4C");
         $("#chead").innerHTML = `<div class="cur"><div class="k">● Yes chance</div><div class="v">${yes}%</div></div><div><div class="k">Pool</div><div class="v">${imd(BigInt(m.yesPool) + BigInt(m.noPool))} IMD</div></div><div class="cd" id="cd"></div>`;
         const h = row.history.map((q) => ({ t: q.t, v: q.yesBps / 100 }));
-        led($("#cv"), { points: h.length ? stepify(h, endT) : [], fmtV: (v) => Math.round(v) + "%", color: "#4FCD4C", step: true });
+        led($("#cv"), { points: h.length ? stepify(h, endT) : [], fmtV: (v) => Math.round(v) + "%", color: "#4FCD4C", step: true, range: [0, 100] });
         $("#cnote").textContent = "Yes share of the pool after each bet";
       } else {
         box.querySelector(".cbox").style.setProperty("--line", "#9E5ECF");
