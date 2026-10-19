@@ -38,6 +38,7 @@
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1F1A23;--ink:#F5EEEE}:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) input,:root:not([data-theme="light"]) .pill{background:#2a2430;color:#F5EEEE}:root:not([data-theme="light"]) .pill.g,:root:not([data-theme="light"]) .pill.p,:root:not([data-theme="light"]) .pill.y{color:#1F1A23;border-color:#F5EEEE}:root:not([data-theme="light"]) .pill.g{background:var(--green)}:root:not([data-theme="light"]) .pill.p{background:var(--purple)}:root:not([data-theme="light"]) .pill.y{background:var(--yellow)}:root:not([data-theme="light"]) .sub a{color:var(--purple)}:root:not([data-theme="light"]) .meta,:root:not([data-theme="light"]) footer{color:#bdb3c4}}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>/* the SDK defines window.Telegram everywhere; WalletConnect then treats any phone browser as Telegram */ if (!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)) try { delete window.Telegram; } catch { window.Telegram = undefined; }</script>
 <script>
   // Inside Telegram: full height, native back button, no "Open bot" (we are in it).
   (function () {

@@ -112,6 +112,7 @@
   th{color:var(--muted);font-weight:400}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>/* the SDK defines window.Telegram everywhere; WalletConnect then treats any phone browser as Telegram */ if (!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)) try { delete window.Telegram; } catch { window.Telegram = undefined; }</script>
 <script>
   // Inside Telegram: full height, native back button, no "Open bot" (we are in it).
   (function () {
@@ -153,7 +154,7 @@
   const P = new URLSearchParams(location.search);
   const mAbi = parseAbi([
     "function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)",
-    "function stake(uint256 id, bool yes, uint128 amount)", "function resolve(uint256 id)", "function settle(uint256 id)", "function claim(uint256 id) returns (uint256)",
+    "function stake(uint256 id, bool yes, uint128 amount)", "function resolve(uint256 id)", "function settle(uint256 id)", "function abandon(uint256 id)", "function claim(uint256 id) returns (uint256)",
     "function claimable(uint256 id, address user) view returns (uint256)",
     "function yesStake(uint256, address) view returns (uint128)", "function noStake(uint256, address) view returns (uint128)",
     "function get(uint256 id) view returns ((address creator,uint64 closeAt,uint64 resolveAfter,uint64 askedAt,uint8 phase,uint96 feeEscrow,uint128 yesPool,uint128 noPool,uint128 winnersShare,bytes32 requestId) m, bytes body)",
@@ -336,13 +337,15 @@
       if (k) swarm = k.status === 1 ? "The swarm is answering…" : k.status === 2 ? `${a.agreed}/${a.panelSize} AI agents agreed · verified onchain` : "No verdict from the swarm";
     }
     const canStake = ph === "open" && now < Number(m.closeAt);
-    const act = ph === "open" && now >= Number(m.resolveAfter) ? ["resolve", "Ask the swarm now"] : ph === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
+    // resolve is accepted for 1 hour after resolveAfter (RESOLVE_WINDOW); after that only a refund is possible.
+    const act = ph === "open" && now > Number(m.resolveAfter) + 3600 ? ["abandon", "Refund everyone (no answer in time)"]
+      : ph === "open" && now >= Number(m.resolveAfter) ? ["resolve", "Ask the swarm now"] : ph === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
     const y = Number(formatEther(m.yesPool)), n = Number(formatEther(m.noPool)), pct = y + n ? Math.round((y * 100) / (y + n)) : 50;
     const left = Number(m.closeAt) - now, leftTxt = left <= 0 ? "betting closed" : left < 3600 ? `closes in ${Math.ceil(left / 60)}m` : left < 86400 ? `closes in ${Math.round(left / 3600)}h` : `closes in ${Math.round(left / 86400)}d`;
     const status = ph === "yes" || ph === "no" ? `<div class="res ${ph}"><b>${ph.toUpperCase()} won</b><span>${esc(swarm)}</span></div>`
       : ph === "void" ? `<div class="res void"><b>No verdict, everyone refunded</b><span>Tap Claim to get your stake back</span></div>`
-      : ph === "asked" ? `<div class="res wait"><b>The swarm is answering…</b><span>Usually 2–3 minutes, paid out automatically</span></div>`
-      : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, paid out automatically</span></div>` : "";
+      : ph === "asked" ? `<div class="res wait"><b>The swarm is answering…</b><span>Usually 2–3 minutes, then winners tap Claim</span></div>`
+      : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, then winners tap Claim</span></div>` : "";
     const k1 = mults(m.yesPool, m.noPool, 0.01);
     $("#view").innerHTML = `<div class="mk">
       <div id="wbar"></div>
@@ -363,7 +366,7 @@
     chartBox(m, row, body);
     $("#trades").innerHTML = row.trades.length ? row.trades.slice().reverse().map((x) => `<div class="trow"><span>${x.user.slice(0, 6)}…${x.user.slice(-4)}</span><b class="${x.side === "yes" ? "ty" : "tn"}">${x.side.toUpperCase()}</b><span>${imd(x.amount)} IMD</span><a href="${txLink(C, x.tx)}">${ago(x.t)}</a></div>`).join("") : `<p class="meta">No bets yet. Be first.</p>`;
     document.querySelector(".rules").innerHTML = `<p>The swarm is asked exactly: <i>“${esc(body.question)}”</i></p>
-      <p>${body.panelSize ?? 15} AI agents answer; a clear majority (at least 7) must agree, and AskSwarmRegistry verifies their signature onchain. YES wins on Yes, NO on No. Split vote, one-sided market or no answer within 3 days: everyone is refunded.</p>
+      <p>${body.panelSize ?? 15} AI agents answer; at least ${body.quorum ?? 11} of them must agree, and AskSwarmRegistry verifies their signature onchain. YES wins on Yes, NO on No. Split vote, one-sided market or no answer within 3 days: everyone is refunded.</p>
       <p>Winners split the losing side. 2% of it goes half to the market's creator, half to fund free asks.</p>
       ${row.voidRiskBps != null ? `<p>Refund risk ${Math.round(row.voidRiskBps / 100)}%: the chance the swarm splits and everyone is refunded, from a model trained on 7,800 past IMD oracle requests (<a href="https://huggingface.co/datasets/evalengine/imd-oracle-outcomes">Eval Engine dataset</a>). Every settled market is written back into that dataset.</p>` : ""}
       <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} on ${C.name} · <a href="${addrLink(C, M)}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id + "&c=" + C.id)}" target="_blank">share on X</a></p>`;

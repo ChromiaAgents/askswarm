@@ -3,7 +3,7 @@
 import { defineChain, createPublicClient, http } from "https://esm.sh/viem@2.57.7";
 
 export const FALLBACK = [
-  { id: 4663, name: "Robinhood Chain", short: "RH", rpc: "https://rpc.mainnet.chain.robinhood.com", explorer: "https://robinhoodchain.blockscout.com", imd: "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127" },
+  { id: 4663, name: "Robinhood Chain", short: "RH", rpc: "https://rpc.mainnet.chain.robinhood.com", explorer: "https://robinhoodchain.blockscout.com", imd: "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127", registry: "0xf3a79f962ec1e75f0087af5491a69dee2a869012", market: "0x6c95a84944b05e7de5000caef80a7c487aa57cb8", wager: "0xd237dd7564edb7a026613ebb6da31da0292af96c" },
   { id: 1, name: "Ethereum", short: "ETH", rpc: "https://ethereum-rpc.publicnode.com", explorer: "https://etherscan.io", imd: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", registry: "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd" },
 ];
 export const chainMap = (list) => Object.fromEntries([...FALLBACK, ...(list || [])].map((c) => [c.id, { ...FALLBACK.find((f) => f.id === c.id), ...c }]));

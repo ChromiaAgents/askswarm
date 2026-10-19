@@ -20,6 +20,7 @@
   a{color:#9E5ECF}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>/* the SDK defines window.Telegram everywhere; WalletConnect then treats any phone browser as Telegram */ if (!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)) try { delete window.Telegram; } catch { window.Telegram = undefined; }</script>
 </head>
 <body>
 <div class="card">

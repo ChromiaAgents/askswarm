@@ -155,7 +155,7 @@ async function walletConnect(C) {
   const raw = provider.request.bind(provider);
   provider.request = async (args) => {
     const signing = /^(eth_sendTransaction|personal_sign|eth_signTypedData)/.test(args?.method || "");
-    if (signing && tg && walletLink) { const el = sheet(`<h3>Confirm in your wallet</h3><p>The request is waiting in your wallet app.</p><div class="row"><button data-open>Open wallet</button></div>`); el.querySelector("[data-open]").onclick = () => tg.openLink(walletLink); }
+    if (signing && tg && walletLink) { const el = sheet(`<h3>Confirm in your wallet</h3><p>The request is waiting in your wallet app.</p><div class="row"><button data-open>Open wallet</button></div>`); el.querySelector("[data-open]").onclick = () => (/^https:/.test(walletLink) ? tg.openLink(walletLink) : window.open(walletLink, "_blank")); }
     try { return await raw(args); } finally { if (signing && tg) closeSheet(); }
   };
   const w = createWalletClient({ account, chain: viemChain(C), transport: custom(provider) });

@@ -22,6 +22,7 @@ export type ChainCfg = {
   rpcPublic: string; // keyless, for browsers and as the server's fallback
   logsRpcs: string[];
   logStep: bigint;
+  addrStep?: bigint; // set: scan by address only in steps this big and decode events locally
   explorer: string;
   imd: Hex;
   registries: Hex[]; // first = current, rest = older deployments still read
@@ -50,13 +51,14 @@ export const CHAINS: Record<number, ChainCfg> = {
     rpc: env.RH_RPC_URL ?? RH_PUBLIC, rpcPublic: RH_PUBLIC,
     // Scans stay on the public RPC: keyed free tiers cap eth_getLogs ranges far below our chunks.
     logsRpcs: list(env.RH_LOGS_RPC_URLS ?? RH_PUBLIC),
-    // The RPC allows 2M blocks for one event type but only 100k when a query names several (OR topics).
-    logStep: 100_000n, explorer: "https://robinhoodchain.blockscout.com",
+    // The RPC caps topic-filtered getLogs at 100k blocks (2M for one topic) but address-only queries
+    // span millions: scan by address in 2M steps and decode locally (lib/logs.ts).
+    logStep: 100_000n, addrStep: 2_000_000n, explorer: "https://robinhoodchain.blockscout.com",
     imd: "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
     registries: list(env.RH_REGISTRY_ADDRESSES ?? env.RH_REGISTRY_ADDRESS),
     market: (env.RH_MARKET_ADDRESS?.toLowerCase() || undefined) as Hex | undefined,
     wager: (env.RH_WAGER_ADDRESS?.toLowerCase() || undefined) as Hex | undefined,
-    fromBlock: BigInt(env.RH_FROM_BLOCK ?? "92500000"),
+    fromBlock: BigInt(env.RH_FROM_BLOCK ?? "92654000"), // launch #2223 deployed at 92,654,033
   },
 };
 

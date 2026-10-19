@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const [action, body, callback, asset, amount] = intake.requestArgs(chainId, intake.registryBody(chainId, chk.request));
   // With a registry the wallet calls registry.ask(body) and approves the registry; without, Intake directly.
   const c = CHAINS[chainId];
-  return json({ request: chk.request, chainId, chain: { id: c.id, name: c.name, rpc: c.id === 1 ? "https://ethereum-rpc.publicnode.com" : c.rpc, explorer: c.explorer }, intake: intake.INTAKE, registry: intake.registryFor(chainId), asset, amount: amount.toString(), args: { action, body, callback } });
+  return json({ request: chk.request, chainId, chain: { id: c.id, name: c.name, rpc: c.rpcPublic, explorer: c.explorer }, intake: intake.INTAKE, registry: intake.registryFor(chainId), asset, amount: amount.toString(), args: { action, body, callback } });
 }
 
 export async function POST(req: Request) {

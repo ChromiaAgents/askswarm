@@ -87,6 +87,7 @@ export async function check(question: string, panelSize: number, chainId?: numbe
   const res = await fetch(`${IMD_API}/requests/check`, {
     method: "POST", headers: json,
     body: JSON.stringify({ action: "oracle.request", input: chainId ? { question, panelSize, chainId } : { question, panelSize } }),
+    signal: AbortSignal.timeout(15_000),
   });
   return j<CheckResult>(res);
 }

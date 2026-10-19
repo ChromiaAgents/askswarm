@@ -134,7 +134,9 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
   if (!raw) return ctx.reply("Usage: /ask <a factual question>\nOr /examples to pick one.");
   if (raw.length > MAX_Q) return ctx.reply(`Too long, max ${MAX_Q} chars.`);
 
-  const chk = await imd.check(raw, PANEL, ASK_CHAIN === 11155111 ? undefined : ASK_CHAIN);
+  let chk: Awaited<ReturnType<typeof imd.check>>;
+  try { chk = await imd.check(raw, PANEL, ASK_CHAIN === 11155111 ? undefined : ASK_CHAIN); }
+  catch (e: any) { console.error("[ask] precheck", e?.message ?? e); return ctx.reply("The swarm's precheck is unreachable right now. Try again in a few minutes, or /markets to bet meanwhile."); }
   if (hardBlockers(chk.blockers).length || !chk.request) {
     const why = hardBlockers(chk.blockers).map((b) => `• ${esc(b.detail)}`).join("\n") || "• no drafted request";
     return ctx.reply(`The swarm won't take that one:\n${why}`, { parse_mode: "HTML" });
@@ -161,7 +163,7 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
   }
   const status = await ctx.reply(text, { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_parameters: replyTo ? { message_id: replyTo } : undefined, reply_markup: kb });
   const pay = cpay();
-  if (pay) {
+  if (pay) try {
     const askId = `${ctx.chat!.id}:${status.message_id}`;
     const payment = await pay.payments.create({
       amount: PRICE_CHR,
@@ -179,7 +181,7 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
     const label = await priceLabel();
     if (ctx.chat!.type === "private") kb.webApp(label, payment.checkout_url);
     else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
-  }
+  } catch (e: any) { console.error("[ask] chromia pay", e?.message ?? e); } // the IMD button below still shows
   // Pay in IMD from the user's own wallet: attestation is then addressed to them, not the house.
   if (ASK_CHAIN !== 11155111) {
     const p = await spot("imd");
@@ -201,7 +203,8 @@ export async function askAndMark(chatId: number | string, msgId: number, questio
   if (!chk.request || hardBlockers(chk.blockers).length) throw new Error(`check failed: ${hardBlockers(chk.blockers).map((b) => b.code).join("; ")}`);
   if (intake.CHAINS[chainId].free) await intake.ensureAllowance(chainId, account());
   const tx = await intake.ask(chainId, account(), chk.request);
-  await markAsked(chatId, msgId, question, chainId, tx, chk.request.panelSize);
+  // Paid for and asked: a failed card edit from here must not look like a failed ask (a webhook retry would ask again).
+  await markAsked(chatId, msgId, question, chainId, tx, chk.request.panelSize).catch((e) => console.error("[ask] markAsked", e?.message ?? e));
   return tx;
 }
 

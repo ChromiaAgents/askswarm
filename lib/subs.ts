@@ -24,9 +24,9 @@ const seen = new Set<string>();
 export async function track(chatId: number | string) {
   const id = String(chatId);
   if (!subsEnabled || seen.has(id)) return;
-  seen.add(id);
   const [muted] = await redis(["SISMEMBER", MUTED, id]);
   if (!muted) await redis(["SADD", CHATS, id]);
+  seen.add(id); // only after the write landed, so a failed one is retried on the next message
 }
 export async function subscribe(chatId: number | string) { const id = String(chatId); seen.add(id); await redis(["SREM", MUTED, id], ["SADD", CHATS, id]); }
 export async function unsubscribe(chatId: number | string, mute = true) { const id = String(chatId); seen.add(id); await redis(["SREM", CHATS, id], ...(mute ? [["SADD", MUTED, id]] : [])); }

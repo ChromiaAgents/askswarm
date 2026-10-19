@@ -38,6 +38,7 @@
   .err{color:#c2185b}.ok{color:#2e8b2b}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>/* the SDK defines window.Telegram everywhere; WalletConnect then treats any phone browser as Telegram */ if (!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)) try { delete window.Telegram; } catch { window.Telegram = undefined; }</script>
 <script>
   // Inside Telegram: full height, native back button, no "Open bot" (we are in it).
   (function () {
