@@ -10,6 +10,7 @@ import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
 import { ACTIVE, CHAINS as NET, txUrl as explorerTx, addrUrl } from "./chains";
+import { track, subscribe, unsubscribe } from "./subs";
 import { recall } from "./recall";
 import { quickTake } from "./quick";
 import { marketTitle, miniAppLink, inTime } from "./announce";
@@ -75,6 +76,20 @@ export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.e
 
 // Native fetch: grammy defaults to node-fetch v2 on Node, which breaks when bundled and hangs every call.
 export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"), { client: { fetch: globalThis.fetch as any } });
+// Market news goes to everyone who uses the bot (lib/subs.ts): remember each chat on first contact.
+bot.use(async (ctx, next) => {
+  if (ctx.chat && !ctx.message?.text?.startsWith("/stop")) await track(ctx.chat.id).catch((e) => console.error("[subs]", e?.message ?? e));
+  await next();
+});
+bot.on("my_chat_member", async (ctx) => {
+  const st = ctx.myChatMember.new_chat_member.status;
+  if (st === "left" || st === "kicked") await unsubscribe(ctx.chat.id, false).catch(() => {});
+  else if (st === "member" || st === "administrator") await subscribe(ctx.chat.id).catch(() => {});
+});
+bot.command("stop", async (ctx) => {
+  await unsubscribe(ctx.chat.id).catch(() => {});
+  return ctx.reply("Done, no more market updates here. Send /start any time to turn them back on.");
+});
 
 const esc = (s: unknown) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
 const chainName = (id: number) => (id === 11155111 ? "Sepolia" : NET[id]?.name ?? "Ethereum");
@@ -310,5 +325,5 @@ bot.command("markets", async (ctx) => {
 });
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
-bot.command("start", (ctx) => ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?\n\nOr /examples to pick one."));
+bot.command("start", async (ctx) => { await subscribe(ctx.chat.id).catch(() => {}); return ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?\n\nOr /examples to pick one.\n\nYou also get new markets and results here. /stop turns that off."); });
 bot.catch((e) => console.error("bot error", e.error));

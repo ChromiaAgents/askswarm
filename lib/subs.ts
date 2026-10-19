@@ -1,0 +1,33 @@
+// Who gets market news: every private chat that talked to the bot and every group it was added to,
+// minus anyone who sent /stop, kept in Upstash Redis over its REST API (Vercel's Upstash integration
+// sets KV_REST_API_URL / KV_REST_API_TOKEN). Without those env vars this is a no-op and news goes only
+// to BROADCAST_CHATS, as before.
+const URL_ = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+const CHATS = "askswarm:chats", MUTED = "askswarm:muted";
+export const subsEnabled = !!(URL_ && TOKEN);
+
+async function redis(...cmds: (string | number)[][]): Promise<any[]> {
+  if (!subsEnabled) return [];
+  const r = await fetch(`${URL_}/pipeline`, {
+    method: "POST", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify(cmds.map((c) => c.map(String))), signal: AbortSignal.timeout(5000),
+  });
+  if (!r.ok) throw new Error(`redis ${r.status}`);
+  return (await r.json()).map((x: any) => x.result);
+}
+
+// ponytail: per-instance memo so a chatty group costs one Redis call per cold start, not per message.
+const seen = new Set<string>();
+
+/** First contact from a chat: subscribe it unless it sent /stop before. */
+export async function track(chatId: number | string) {
+  const id = String(chatId);
+  if (!subsEnabled || seen.has(id)) return;
+  seen.add(id);
+  const [muted] = await redis(["SISMEMBER", MUTED, id]);
+  if (!muted) await redis(["SADD", CHATS, id]);
+}
+export async function subscribe(chatId: number | string) { const id = String(chatId); seen.add(id); await redis(["SREM", MUTED, id], ["SADD", CHATS, id]); }
+export async function unsubscribe(chatId: number | string, mute = true) { const id = String(chatId); seen.add(id); await redis(["SREM", CHATS, id], ...(mute ? [["SADD", MUTED, id]] : [])); }
+export async function subscribers(): Promise<string[]> { const [all] = await redis(["SMEMBERS", CHATS]); return all ?? []; }

@@ -1,6 +1,7 @@
-// Posts market news to the Telegram chats in BROADCAST_CHATS (comma-separated chat ids), with a button
-// that opens the market inside the `pay` Mini App (t.me/<bot>/pay?startapp=m<id>), which routes there.
-// Plain Bot API fetch, so the keeper can use it without loading the whole bot.
+// Posts market news to every subscribed chat (lib/subs.ts: users who talked to the bot, groups it is in)
+// plus BROADCAST_CHATS, with a button that opens the market inside the `pay` Mini App
+// (t.me/<bot>/pay?startapp=m<id>). Plain Bot API fetch, so the keeper can use it without the whole bot.
+import { subscribers, unsubscribe } from "./subs";
 const BOT = process.env.BOT_USERNAME ?? "askswarm_bot";
 const CHATS = (process.env.BROADCAST_CHATS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const MONTHS: Record<string, string> = { January: "Jan", February: "Feb", March: "Mar", April: "Apr", May: "May", June: "Jun", July: "Jul", August: "Aug", September: "Sep", October: "Oct", November: "Nov", December: "Dec" };
@@ -17,12 +18,25 @@ export function marketTitle(question: string, daily = false) {
 }
 
 export async function announce(html: string, button: { text: string; start: string }) {
-  if (!CHATS.length || !process.env.TELEGRAM_BOT_TOKEN) return;
-  await Promise.all(CHATS.map((chat_id) =>
-    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(8000),
-      body: JSON.stringify({ chat_id, text: html, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: [[{ text: button.text, url: miniAppLink(button.start) }]] } }),
-    }).catch((e) => console.error("[announce]", e?.message ?? e))));
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  const subs = await subscribers().catch((e) => { console.error("[announce] subs", e?.message ?? e); return [] as string[]; });
+  const to = [...new Set([...CHATS, ...subs])];
+  const reply_markup = { inline_keyboard: [[{ text: button.text, url: miniAppLink(button.start) }]] };
+  // Telegram allows ~30 messages a second overall: send in batches of 25 a second.
+  for (let i = 0; i < to.length; i += 25) {
+    await Promise.all(to.slice(i, i + 25).map(async (chat_id) => {
+      const priv = !chat_id.startsWith("-"); // private chats get the way out; groups don't need it
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(8000),
+          body: JSON.stringify({ chat_id, text: priv ? `${html}\n<i>/stop to turn off these updates</i>` : html, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup }),
+        });
+        // Blocked by the user, or removed from the group: stop sending there (not a /stop, so no mute).
+        if (r.status === 403 && !CHATS.includes(chat_id)) await unsubscribe(chat_id, false);
+      } catch (e: any) { console.error("[announce]", chat_id, e?.message ?? e); }
+    }));
+    if (i + 25 < to.length) await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 /** "6h 5m" style countdown; timezone-free, so every reader in the group sees the same thing. */
