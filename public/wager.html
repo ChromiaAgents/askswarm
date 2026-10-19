@@ -77,14 +77,14 @@
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex } from "https://esm.sh/viem@2.57.7";
   import { chainMap, viemChain, pubFor, switchTo, addr as addrLink, tx as txLink, badge } from "/chain.js";
-  import { getWallet, walletBar } from "/wallet.js";
+  import { getWallet, walletBar, knownAccount } from "/wallet.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const P = new URLSearchParams(location.search);
   const wagerAbi = parseAbi([
     "function create(bytes body, bool creatorSaysYes, uint96 stake, uint64 joinBy, uint64 resolveAfter) returns (uint256)",
-    "function join(uint256 id)", "function resolve(uint256 id)", "function settle(uint256 id)", "function cancel(uint256 id)",
+    "function join(uint256 id)", "function resolve(uint256 id)", "function settle(uint256 id)", "function cancel(uint256 id)", "function abandon(uint256 id)",
     "function get(uint256 id) view returns ((address yes,address no,address creator,uint96 stake,uint96 fee,uint64 joinBy,uint64 resolveAfter,uint64 askedAt,uint8 state,bytes32 requestId,address winner) w, bytes body)",
     "event Created(uint256 indexed id, address indexed creator, bool creatorSaysYes, uint256 stake, uint64 joinBy, uint64 resolveAfter, bytes body)",
   ]);
@@ -127,9 +127,11 @@
       const [k, a] = await pub.readContract({ address: REG, abi: regAbi, functionName: "get", args: [w.requestId] }).catch(() => [null, null]);
       if (k) answerLine = k.status === 2 ? `swarm answered ${a.answer.endsWith("1") ? "Yes" : "No"} · ${a.agreed}/${a.panelSize} agreed · verified onchain` : k.status === 1 ? "swarm is working…" : `swarm: ${["", "", "", "refused", "no consensus", "unverified", "lost"][k.status]}`;
     }
-    const now = Date.now() / 1000;
-    const action = st === "open" ? (now <= Number(w.joinBy) ? ["join", `Take the ${w.yes === "0x0000000000000000000000000000000000000000" ? "Yes" : "No"} side · stake ${formatEther(w.stake)} IMD`] : ["cancel", "Cancel (nobody joined)"])
-      : st === "matched" ? (now >= Number(w.resolveAfter) ? ["resolve", "Ask the swarm now"] : null)
+    const now = Date.now() / 1000, me = await knownAccount().catch(() => null);
+    const mine = !!me && me.toLowerCase() === w.creator.toLowerCase();
+    const action = st === "open" ? (now <= Number(w.joinBy) && !mine ? ["join", `Take the ${w.yes === "0x0000000000000000000000000000000000000000" ? "Yes" : "No"} side · stake ${formatEther(w.stake)} IMD`] : ["cancel", mine && now <= Number(w.joinBy) ? "Cancel your wager (get your stake back)" : "Cancel (nobody joined)"])
+      // matched: resolve from resolveAfter; if it still has no answer 3 days later (ANSWER_WINDOW), refund both
+      : st === "matched" ? (now > Number(w.resolveAfter) + 3 * 86400 ? ["abandon", "Refund both sides (no answer in time)"] : now >= Number(w.resolveAfter) ? ["resolve", "Ask the swarm now"] : null)
       : st === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
     $("#view").innerHTML = `<div class="card">${badge(C)} <span class="pill ${st}">${st}</span><p class="q">${esc(body.question)}</p>
       <div class="meta">Yes: ${short(w.yes)} · No: ${short(w.no)} · stake ${formatEther(w.stake)} IMD each<br>join by ${fmt(w.joinBy)} · ask after ${fmt(w.resolveAfter)}${answerLine ? "<br>" + esc(answerLine) : ""}${w.winner !== "0x0000000000000000000000000000000000000000" ? "<br>winner " + short(w.winner) : ""}<br>wager #${id} on ${C.name} · <a href="${addrLink(C, WAGER)}">contract</a> · share: <a href="?id=${id}&c=${C.id}">${location.origin}/wager?id=${id}&c=${C.id}</a></div>
@@ -140,6 +142,7 @@
       const log = logger($("#vlog")); $("#act").disabled = true;
       try {
         const { w: wc, account } = await wallet();
+        if (action[0] === "join" && (wc.account?.address || account).toLowerCase() === w.creator.toLowerCase()) { log("This is your own wager, so you can't take the other side. Share it, or cancel it."); setTimeout(() => showWager(id), 1500); return; }
         if (action[0] === "join") await ensureAllowance(wc, account, IMD, w.stake, log);
         log("Confirm in your wallet…");
         const h = await wc.writeContract({ account: wc.account || account, address: WAGER, abi: wagerAbi, functionName: action[0], args: [BigInt(id)] });

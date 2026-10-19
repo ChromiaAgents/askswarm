@@ -329,4 +329,7 @@ bot.command("markets", async (ctx) => {
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
 bot.command("start", async (ctx) => { await subscribe(ctx.chat.id).catch(() => {}); return ctx.reply("Ask the IMD swarm a factual question:\n/ask Did Argentina win the 2022 FIFA World Cup?\n\nOr /examples to pick one.\n\nYou also get new markets and results here. /stop turns that off."); });
+bot.command("help", (ctx) => ctx.reply("/ask <question> asks the IMD swarm\n/markets shows today's rounds to bet on\n/bet <yes/no question> opens a 1v1 bet\n/examples gives sample questions\n/stop turns off market updates"));
+// In a private chat, a plain message is a question: treat it as /ask (commands above take precedence).
+bot.on("message:text", (ctx) => (ctx.chat.type === "private" && !ctx.message.text.startsWith("/") ? ask(ctx, ctx.message.text) : undefined));
 bot.catch((e) => console.error("bot error", e.error));

@@ -197,7 +197,18 @@ async function openWallet(C, { log = () => {} } = {}) {
 }
 
 /** Forget the wallet in use (and drop a WalletConnect session); an AskSwarm wallet key stays. */
-export async function switchWallet() { remember(CHOICE, null); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
+export async function switchWallet() {
+  remember(CHOICE, null); await session?.provider?.disconnect?.().catch(() => {}); session = null;
+  // A WalletConnect session saved by an earlier page load reconnects silently unless its storage goes too.
+  try { for (const k of Object.keys(localStorage)) if (/^(wc@2|@appkit|@w3m|WALLETCONNECT)/.test(k)) localStorage.removeItem(k); } catch {}
+}
+
+/** The connected account if one is already known, without prompting (null otherwise). */
+export async function knownAccount() {
+  if (session?.account) return session.account;
+  if (window.ethereum) { try { return (await window.ethereum.request({ method: "eth_accounts" }))[0] ?? null; } catch {} }
+  return null;
+}
 
 // ---- AskSwarm wallet bar: balance, deposit, withdraw, export ----
 export async function walletBar(el, C) {
@@ -253,8 +264,9 @@ async function withdraw(C, bar) {
 function more(C, bar, where = "this browser") {
   const fragile = tg && where === "this browser"; // Telegram may clear its webview storage
   const el = sheet(`<h3>AskSwarm wallet</h3><p>Your key is kept in ${esc(where)}. Nobody else holds it, so if you lose this device without a backup, the funds are gone. Keep small amounts here.</p>${fragile ? `<p><b>Back up your key now:</b> this Telegram version can only keep it in the app's browser storage, which can be cleared.</p>` : ""}
-    <div class="row"><button data-x>Show private key</button><button data-s>Use another wallet</button></div><div id="sw-k" style="margin-top:10px"></div><button class="x">Close</button>`);
+    <div class="row"><button data-x>Show private key</button><button data-u>Use this wallet for bets</button><button data-s>Use another wallet</button></div><div id="sw-k" style="margin-top:10px"></div><button class="x">Close</button>`);
   el.querySelector(".x").onclick = closeSheet;
   el.querySelector("[data-x]").onclick = async () => { const k = await loadKey(); el.querySelector("#sw-k").innerHTML = k ? `<p>Anyone with this key controls the wallet. Import it into MetaMask or Rabby to move funds anywhere.</p><code>${k.pk}</code><div class="row" style="margin-top:8px"><button data-c>Copy key</button></div>` : "No key yet."; el.querySelector("[data-c]")?.addEventListener("click", (e) => { navigator.clipboard?.writeText(k.pk); e.target.textContent = "Copied"; }); };
+  el.querySelector("[data-u]").onclick = () => { remember(CHOICE, "askswarm"); session = null; closeSheet(); };
   el.querySelector("[data-s]").onclick = async () => { await switchWallet(); closeSheet(); if (bar) bar.innerHTML = ""; };
 }

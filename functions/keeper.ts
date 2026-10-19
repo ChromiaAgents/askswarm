@@ -43,7 +43,8 @@ type Act = { chainId?: number; contract: "market" | "wager"; id: number; fn: str
 // Every chain with contracts gets resolved and settled; daily rounds open only on the active chain.
 export async function runKeeper(): Promise<Act[]> {
   const out: Act[] = [];
-  for (const c of chainList().filter((c) => c.market || c.wager)) {
+  // The active chain first: a slow history-only chain must not eat the run's time before it.
+  for (const c of chainList().filter((c) => c.market || c.wager).sort((a, b) => Number(b.id === ACTIVE.id) - Number(a.id === ACTIVE.id))) {
     try { out.push(...(await runChain(c)).map((a) => ({ chainId: c.id, ...a }))); }
     catch (e: any) { out.push({ chainId: c.id, contract: "market", id: 0, fn: "chain", skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
   }
@@ -72,18 +73,38 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
   }
 
   const M = c.market;
-  if (M && DAILY.length && c.id === ACTIVE.id) await ensureDaily(M);
 
   async function ensureDaily(M: Hex) {
     const d = new Date(), hour = d.getUTCHours();
     if (hour >= 18) return; // keep at least ~5h of betting per round
     const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
     const logs = await getLogsChunked(c, { address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any }, c.id === 1 ? BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300") : c.fromBlock);
-    const bodies = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)); } catch { return {}; } });
-    const qs = bodies.map((x: any) => (x.question ?? "") as string);
+    // Only the house's own rounds count: anyone can open a market with the same question shape.
+    const mine = logs.filter((l: any) => String(l.args.creator).toLowerCase() === account.address.toLowerCase());
+    const bodies = mine.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)); } catch { return {}; } });
+    const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
+    const imdOf = (a: Hex) => pub.readContract({ address: IMD_TOKEN, abi: erc20Abi, functionName: "balanceOf", args: [a] });
     for (const pair of DAILY) {
-      if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
+      const k = bodies.findIndex((x: any) => typeof x.question === "string" && x.question.startsWith(dailyPrefix(pair, day)));
+      if (k >= 0) {
+        // Opened earlier but the seeding failed part way: finish it, so the round is live and announced.
+        const id = BigInt(mine[k].args.id);
+        const [m] = await pub.readContract({ address: M, abi: marketAbi, functionName: "get", args: [id] });
+        if (SEED > 0n && m.phase === 1 && m.yesPool === 0n && m.noPool === 0n && BigInt(Math.floor(Date.now() / 1000)) < m.closeAt && (await imdOf(account.address)) >= 2n * SEED) {
+          try {
+            await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, 2n * SEED] });
+            await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, true, SEED] });
+            const h = await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, false, SEED] });
+            acts.push({ contract: "market", id: Number(id), fn: `daily ${pair} seeded`, tx: h });
+            await announceOpened(Number(id), bodies[k].question, Number(m.closeAt), true, c.id);
+          } catch (e: any) { acts.push({ contract: "market", id: Number(id), fn: `daily ${pair} seed`, skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
+        }
+        continue;
+      }
       try {
+        // The market escrows the registry's current price; open only when the house can also seed both sides.
+        const fee = c.registries[0] ? await pub.readContract({ address: c.registries[0], abi: parseAbi(["function price() view returns (uint256)"]), functionName: "price" }) : 500000000000000000n;
+        if ((await imdOf(account.address)) < fee + 2n * SEED) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "house IMD too low" }); continue; }
         const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" }, signal: AbortSignal.timeout(8000) })).json();
         const price = Number(t.price); if (!Number.isFinite(price)) continue;
         const question = dailyQuestion(pair, day, price);
@@ -102,8 +123,7 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
         }
         if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
         const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
-        const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
-        await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, 500000000000000000n + 2n * SEED] });
+        await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, fee + 2n * SEED] });
         const h = await send({ address: M, abi: marketAbi, functionName: "open", args: [stringToHex(JSON.stringify(chk.request)), closeAt, after] });
         const rc = await pub.getTransactionReceipt({ hash: h });
         const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase())!.topics[1]!);
@@ -138,9 +158,14 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
     for (let i = 1n; i <= n; i++) {
       const [w] = await pub.readContract({ address: W, abi: wagerAbi, functionName: "get", args: [i] });
       if (w.state === 1 && now > w.joinBy) await tryCall("wager", W, wagerAbi, "cancel", i); // Open, nobody joined
+      else if (w.state === 2 && now > w.resolveAfter + 3n * 86400n) await tryCall("wager", W, wagerAbi, "abandon", i); // Matched, never answered: refund both
       else if (w.state === 2 && now >= w.resolveAfter) await tryCall("wager", W, wagerAbi, "resolve", i); // Matched
       else if (w.state === 3) await tryCall("wager", W, wagerAbi, "settle", i); // Asked
     }
+  }
+  // Daily rounds last, isolated: a failed history scan or open must not hold up resolves and settles.
+  if (M && DAILY.length && c.id === ACTIVE.id) {
+    try { await ensureDaily(M); } catch (e: any) { acts.push({ contract: "market", id: 0, fn: "daily", skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
   }
   return acts.filter((a) => a.tx || !/StillPending|TooEarly/.test(a.skipped ?? ""));
 }

@@ -59,6 +59,7 @@
 
   $("go").onclick = async () => {
     const btn = $("go"); btn.disabled = true;
+    let sent = null;
     try {
       // Browser wallet, AskSwarm wallet (Telegram) or WalletConnect: see /wallet.js.
       const { w: wallet, account } = await getWallet(CHAIN, { log });
@@ -80,7 +81,7 @@
       }
 
       btn.textContent = "Confirm request in wallet…";
-      const tx = draft.registry
+      const tx = sent = draft.registry
         ? await wallet.writeContract({ account: wallet.account || account, address: draft.registry, abi: registryAbi, functionName: "ask", args: [draft.args.body] })
         : await wallet.writeContract({ account: wallet.account || account, address: draft.intake, abi: intakeAbi, functionName: "request",
             args: [draft.args.action, draft.args.body, draft.args.callback, draft.asset, amount] });
@@ -89,13 +90,15 @@
       if (rcpt.status !== "success") { log("Transaction reverted.", "err"); btn.textContent = "Reverted"; return; }
 
       btn.textContent = "Telling the bot…";
-      const res = await fetch("/api/imd", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...params, tx, chainId: CHAIN.id }) }).then((r) => r.json());
+      const res = await fetch("/api/imd", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...params, tx, chainId: CHAIN.id }) }).then((r) => r.json()).catch(() => ({ ok: false, error: "network" }));
       if (!res.ok) { log(`Bot did not accept the tx: ${res.error}. Keep the hash: ${tx}`, "err"); btn.textContent = "Done, but not linked"; return; }
       log("Asked. Back in Telegram, tap Check status in 1–3 min.", "ok");
       btn.textContent = "Done";
       const a = document.createElement("a"); a.href = txLink(CHAIN, tx); a.textContent = "View on explorer"; $("log").appendChild(a);
     } catch (e) {
       log(e?.shortMessage || e?.message || String(e), "err");
+      // Already paid and asked onchain: re-sending would pay twice. Keep the hash instead.
+      if (sent) { log(`Your request is onchain: ${sent}. The swarm still answers; keep this hash.`, "ok"); btn.textContent = "Done"; return; }
       btn.textContent = "Try again"; btn.disabled = false;
     }
   };
