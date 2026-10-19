@@ -15,8 +15,10 @@ import { viemChain, switchTo, addr as addrLink } from "/chain.js";
 
 // Chromia's Reown project (shared with Chromia Pay). Not a secret; swap for AskSwarm's own when registered.
 const WC_PROJECT_ID = "70e9c33528a1e905ab36488c8281098f";
-const KEY = "askswarm_wallet_v1", CHOICE = "askswarm_wallet_choice";
+const KEY = "askswarm_wallet_v1", CHOICE = "askswarm_wallet_choice", WC_LINK = "askswarm_wc_link";
 const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+// Only the storage this Telegram version supports; otherwise the SDK throws "not supported".
+const secure = tg?.isVersionAtLeast?.("9.0") ? tg.SecureStorage : null, cloud = tg?.isVersionAtLeast?.("6.9") ? tg.CloudStorage : null;
 export const inTelegram = !!tg;
 
 const css = `.sw-sheet{position:fixed;inset:auto 0 0 0;z-index:80;background:var(--card,#2a2430);color:var(--ink,#F5EEEE);border-top:2px solid var(--ink,#1F1A23);border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.35);max-height:85vh;overflow:auto}
@@ -47,21 +49,27 @@ const closeSheet = () => document.querySelector(".sw-sheet")?.remove();
 // ---- key storage: Telegram SecureStorage → CloudStorage → this browser ----
 // Older Telegram clients (and plain browsers that load telegram-web-app.js) never call back: time out.
 const within = (p, ms, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
-// null = empty (or unsupported, which throws at once); undefined = no answer in time.
-const tgGet = (api, k) => within(new Promise((res) => { try { api.getItem(k, (err, v) => res(err ? null : v || null)); } catch { res(null); } }), 2500, undefined);
+// null only when storage says "empty"; undefined = unknown (no answer in time, or an error).
+// SecureStorage's third argument says the key exists but must be restored (new device): ask for it.
+const tgGet = (api, k) => within(new Promise((res) => { try { api.getItem(k, (err, v, canRestore) => res(err ? undefined : v || (canRestore ? "restore" : null))); } catch { res(undefined); } }), 2500, undefined);
+const tgRestore = (k) => within(new Promise((res) => { try { secure.restoreItem(k, (err, v) => res(err ? undefined : v || undefined)); } catch { res(undefined); } }), 120_000, undefined);
 const tgSet = (api, k, v) => within(new Promise((res) => { try { api.setItem(k, v, (err, ok) => res(!err && ok !== false)); } catch { res(false); } }), 2500, false);
 async function loadKey() {
   let silent = false;
-  if (tg?.SecureStorage) { const v = await tgGet(tg.SecureStorage, KEY); if (v) return { pk: v, where: "Telegram secure storage on this phone" }; silent ||= v === undefined; }
-  if (tg?.CloudStorage) { const v = await tgGet(tg.CloudStorage, KEY); if (v) return { pk: v, where: "Telegram cloud storage" }; silent ||= v === undefined; }
+  if (secure) {
+    let v = await tgGet(secure, KEY);
+    if (v === "restore") { v = await tgRestore(KEY); if (!v) throw new Error("Your AskSwarm wallet is saved in Telegram but needs restoring. Allow the restore, or reopen the app."); }
+    if (v) return { pk: v, where: "Telegram secure storage on this phone" }; silent ||= v === undefined;
+  }
+  if (cloud) { const v = await tgGet(cloud, KEY); if (v) return { pk: v, where: "Telegram cloud storage" }; silent ||= v === undefined; }
   const v = recall(KEY); if (v) return { pk: v, where: "this browser" };
   // Never mint a new key while Telegram has not said "empty": that could overwrite a funded one.
   if (silent) throw new Error("Telegram storage did not answer. Close and reopen the app, then try again.");
   return null;
 }
 async function saveKey(pk) {
-  if (tg?.SecureStorage && (await tgSet(tg.SecureStorage, KEY, pk)) && (await tgGet(tg.SecureStorage, KEY)) === pk) return "Telegram secure storage on this phone";
-  if (tg?.CloudStorage && (await tgSet(tg.CloudStorage, KEY, pk)) && (await tgGet(tg.CloudStorage, KEY)) === pk) return "Telegram cloud storage";
+  if (secure && (await tgSet(secure, KEY, pk)) && (await tgGet(secure, KEY)) === pk) return "Telegram secure storage on this phone";
+  if (cloud && (await tgSet(cloud, KEY, pk)) && (await tgGet(cloud, KEY)) === pk) return "Telegram cloud storage";
   // ponytail: last resort is this webview's localStorage, which Telegram may clear; the UI says so.
   remember(KEY, pk); if (recall(KEY) !== pk) throw new Error("Could not store a wallet key on this device.");
   return "this browser";
@@ -92,8 +100,11 @@ export async function ensureGas(C, account, log = () => {}) {
   if ((await pub.getBalance({ address: account })) >= parseEther("0.00002")) return null;
   if (!tg) throw new Error("This wallet needs a little ETH on " + C.name + " for gas. Send some to " + account + ".");
   log("Getting gas for your wallet…");
-  const r = await fetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: tg.initData, address: account }) }).then((x) => x.json()).catch(() => ({ error: "network" }));
-  if (r.error) throw new Error(r.error === "slow_down" ? "Wait a few seconds and try again." : "Could not fund gas (" + r.error + ").");
+  const r = await fetch("/api/wallet", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: tg.initData, address: account, chainId: C.id }) }).then((x) => x.json()).catch(() => ({ error: "network" }));
+  const send = "Send a little ETH on " + C.name + " to " + account + " for gas.";
+  if (r.error === "slow_down") throw new Error("Wait a few seconds and try again.");
+  if (r.error === "limit" || r.error === "wrong_chain" || r.error === "faucet_empty" || (!r.error && r.chainId !== C.id)) throw new Error("Free gas is used up. " + send);
+  if (r.error) throw new Error("Could not fund gas (" + r.error + "). " + send);
   if (r.starter) log(`Welcome: ${r.starter} IMD starter added to your wallet.`, "ok");
   return r;
 }
@@ -107,22 +118,23 @@ async function walletConnect(C) {
     rpcMap: { [C.id]: C.rpc, 1: "https://ethereum-rpc.publicnode.com" },
     metadata: { name: "AskSwarm", description: "Bet IMD on yes/no questions the IMD swarm settles", url: location.origin, icons: [location.origin + "/logo.svg"] },
   });
-  let walletLink = null;
-  if (tg) {
+  let walletLink = recall(WC_LINK);
+  if (provider.session) { /* restored from an earlier connect: no new pairing */ }
+  else if (tg) {
     // Pairing URI first, then a tap opens the wallet through Telegram (a gesture is required).
     const connecting = provider.connect();
     const uri = await new Promise((res, rej) => { provider.on("display_uri", res); connecting.catch(rej); });
     const el = sheet(`<h3>Open your wallet</h3><p>Approve the connection in your wallet app, then come back to Telegram. Your wallet needs ${esc(C.name)} support.</p>
       <div class="row">${WC_WALLETS.map(([n], i) => `<button data-i="${i}">${n}</button>`).join("")}<button data-copy>Copy link</button></div><button class="x">Cancel</button>`);
-    el.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => { walletLink = WC_WALLETS[b.dataset.i][1]; tg.openLink(walletLink + "/wc?uri=" + encodeURIComponent(uri)); }));
+    el.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => { walletLink = WC_WALLETS[b.dataset.i][1]; remember(WC_LINK, walletLink); tg.openLink(walletLink + "/wc?uri=" + encodeURIComponent(uri)); }));
     el.querySelector("[data-copy]").onclick = (e) => { navigator.clipboard?.writeText(uri); e.target.textContent = "Copied"; };
     const cancelled = new Promise((_, rej) => { el.querySelector(".x").onclick = () => rej(new Error("Cancelled.")); });
-    try { await Promise.race([connecting, cancelled]); } finally { closeSheet(); }
+    try { await Promise.race([connecting, cancelled]); } catch (e) { connecting.catch(() => {}); throw e; } finally { closeSheet(); }
   } else {
     await provider.connect();
   }
   const approved = (provider.session?.namespaces?.eip155?.chains || []).map((c) => Number(c.split(":")[1]));
-  if (approved.length && !approved.includes(C.id)) { await provider.disconnect().catch(() => {}); throw new Error(`Your wallet did not approve ${C.name}. Use the AskSwarm wallet, or a wallet with ${C.name} support.`); }
+  if (!approved.includes(C.id)) { await provider.disconnect().catch(() => {}); throw new Error(`Your wallet did not approve ${C.name}. Use the AskSwarm wallet, or a wallet with ${C.name} support.`); }
   provider.chainId = C.id;
   const account = provider.accounts[0];
   // In Telegram, every signing request needs the user to switch to the wallet app: offer the tap.
@@ -156,13 +168,19 @@ function pick(C) {
 }
 
 /** The wallet for this page's chain C. Prompts once, then remembers the choice. */
-export async function getWallet(C, { log = () => {} } = {}) {
-  if (session && session.chainId === C.id) return session;
+let pending = null;
+export function getWallet(C, opts) {
+  if (session && session.chainId === C.id) return Promise.resolve(session);
+  // One connect at a time: a second tap waits for the first instead of opening another prompt.
+  return (pending ||= openWallet(C, opts).finally(() => (pending = null)));
+}
+async function openWallet(C, { log = () => {} } = {}) {
   let s;
   if (window.ethereum) s = await injected(C);
   else {
     let choice = recall(CHOICE);
-    if (!choice) choice = (await hasEmbedded()) ? "askswarm" : await pick(C);
+    if (!choice) choice = (await hasEmbedded()) ? "askswarm" : "pick";
+    if (choice === "pick") choice = await pick(C);
     s = choice === "walletconnect" ? await walletConnect(C) : await embedded(C);
     remember(CHOICE, s.kind);
   }
@@ -172,13 +190,21 @@ export async function getWallet(C, { log = () => {} } = {}) {
   return session;
 }
 
-/** Forget the remembered choice (and a WalletConnect session); the AskSwarm wallet key stays. */
-export async function switchWallet() { remember(CHOICE, null); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
+/** Ask again next time (and drop a WalletConnect session); the AskSwarm wallet key stays. */
+export async function switchWallet() { remember(CHOICE, "pick"); remember(WC_LINK, null); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
 
 // ---- AskSwarm wallet bar: balance, deposit, withdraw, export ----
 export async function walletBar(el, C) {
   if (!el || window.ethereum) return;
-  const s = session?.kind === "askswarm" ? session : (recall(CHOICE) !== "walletconnect" ? await embedded(C, { create: false }) : null);
+  if (recall(CHOICE) === "walletconnect") {
+    el.className = "sw-bar";
+    el.innerHTML = `<span>Connected wallet${session?.kind === "walletconnect" ? ` <a href="${addrLink(C, session.account)}" target="_blank" rel="noopener">${short(session.account)}</a>` : ""}</span><button data-a="switch">Switch wallet</button>`;
+    el.querySelector('[data-a="switch"]').onclick = async () => { await switchWallet(); el.innerHTML = ""; };
+    return;
+  }
+  let s;
+  try { s = session?.kind === "askswarm" ? session : await embedded(C, { create: false }); }
+  catch (e) { el.className = "sw-bar"; el.textContent = e.message; return; }
   if (!s) { el.innerHTML = ""; return; }
   const pub = createPublicClient({ chain: viemChain(C), transport: http(C.rpc) });
   const [eth, imd] = await Promise.all([pub.getBalance({ address: s.account }), pub.readContract({ address: C.imd, abi: erc20Abi, functionName: "balanceOf", args: [s.account] })]).catch(() => [0n, 0n]);
@@ -188,7 +214,7 @@ export async function walletBar(el, C) {
     <button data-a="deposit">Deposit</button><button data-a="withdraw">Withdraw</button><button data-a="more">⋯</button>`;
   el.querySelector('[data-a="deposit"]').onclick = () => deposit(C, s.account);
   el.querySelector('[data-a="withdraw"]').onclick = () => withdraw(C, el);
-  el.querySelector('[data-a="more"]').onclick = () => more(C, el);
+  el.querySelector('[data-a="more"]').onclick = () => more(C, el, s.where);
 }
 
 export function openDeposit(C, account) { deposit(C, account); }
@@ -218,8 +244,9 @@ async function withdraw(C, bar) {
   };
 }
 
-function more(C, bar) {
-  const el = sheet(`<h3>AskSwarm wallet</h3><p>Your key is kept in ${tg?.SecureStorage ? "Telegram secure storage on this phone" : tg ? "Telegram cloud storage" : "this browser"}. Nobody else holds it, so if you lose this device without a backup, the funds are gone. Keep small amounts here.</p>
+function more(C, bar, where = "this browser") {
+  const fragile = tg && where === "this browser"; // Telegram may clear its webview storage
+  const el = sheet(`<h3>AskSwarm wallet</h3><p>Your key is kept in ${esc(where)}. Nobody else holds it, so if you lose this device without a backup, the funds are gone. Keep small amounts here.</p>${fragile ? `<p><b>Back up your key now:</b> this Telegram version can only keep it in the app's browser storage, which can be cleared.</p>` : ""}
     <div class="row"><button data-x>Show private key</button><button data-s>Use another wallet</button></div><div id="sw-k" style="margin-top:10px"></div><button class="x">Close</button>`);
   el.querySelector(".x").onclick = closeSheet;
   el.querySelector("[data-x]").onclick = async () => { const k = await loadKey(); el.querySelector("#sw-k").innerHTML = k ? `<p>Anyone with this key controls the wallet. Import it into MetaMask or Rabby to move funds anywhere.</p><code>${k.pk}</code><div class="row" style="margin-top:8px"><button data-c>Copy key</button></div>` : "No key yet."; el.querySelector("[data-c]")?.addEventListener("click", (e) => { navigator.clipboard?.writeText(k.pk); e.target.textContent = "Copied"; }); };

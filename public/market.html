@@ -371,7 +371,10 @@
     const log = logger($("#vlog")); wlog = log;
     walletBar($("#wbar"), C); window.addEventListener("askswarm:wallet", () => walletBar($("#wbar"), C));
     const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
-    const run = (fn, btn) => async () => { if (btn) btn.disabled = true; try { await fn(); log("Done.", "ok"); walletBar($("#wbar"), C); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); if (btn) btn.disabled = false; } };
+    // One action at a time: Telegram's MainButton has no disabled state of its own, so guard here too.
+    let busy = false;
+    const lock = (on) => { busy = on; if (tg) { on ? (tg.MainButton.disable(), tg.MainButton.showProgress()) : (tg.MainButton.hideProgress(), tg.MainButton.enable()); } };
+    const run = (fn, btn) => async () => { if (busy) return; lock(true); if (btn) btn.disabled = true; try { await fn(); log("Done.", "ok"); walletBar($("#wbar"), C); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); if (btn) btn.disabled = false; lock(false); } };
     if (canStake) {
       let side = true;
       const amt = () => Number($("#amt").value) || 0;
