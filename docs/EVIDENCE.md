@@ -48,3 +48,36 @@ Registry #2088 `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea` (the current registr
 
 Both were opened between the AskSwarm house wallet and a second test wallet to prove the full loop;
 markets opened by others show up at https://askswarm-nine.vercel.app/market.
+
+## Robinhood Chain: 2026-10-19 batch
+
+Registry [`0xf3a79f962ec1e75f0087af5491a69dee2a869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012), each row is one `ask(body)` paid in 0.5 IMD by the house wallet, answered by the swarm and verified onchain in `onOracleResult`.
+
+| # | question | ask tx | oracle request | outcome | onchain verified |
+|---|---|---|---|---|---|
+| 1 | What is the Nasdaq ticker symbol of Robinhood Markets, Inc.? Answer with the ticker symbol only. | [0x63485085…](https://robinhoodchain.blockscout.com/tx/0x6348508568e723ca9ed29c6c78ab895536174923c33626fa2fe839dfe29706f2) | [260e33e8](https://api.imd.fun/oracle/requests/260e33e8-6dfd-451b-b9fe-535f3b6f7cc9/attestation) | attested · HOOD | Pending |
+| 2 | In what year did Robinhood Markets, Inc. list its shares on the Nasdaq? Answer with the four-digit year only. | [0x1ffb7b2a…](https://robinhoodchain.blockscout.com/tx/0x1ffb7b2a85957331e792870f0517084928e1eb6a89c63f0191da2e131f972190) | [23752859](https://api.imd.fun/oracle/requests/23752859-f062-49ad-b34d-df72b675fd9f/attestation) | attested | Pending |
+| 3 | Did Ethereum switch from proof of work to proof of stake (the Merge) in 2022? | [0x35b8aef8…](https://robinhoodchain.blockscout.com/tx/0x35b8aef821770347dece8123505dbeee68c8db09e7a48a34d7d274e7e1e6b778) | [ba3c19fe](https://api.imd.fun/oracle/requests/ba3c19fe-8870-462f-849a-625fe16f757e/attestation) | attested | Pending |
+| 4 | How many satoshis make up one bitcoin? Answer with the whole number only. | [0x5feb871f…](https://robinhoodchain.blockscout.com/tx/0x5feb871fe9a1124a86f4dc92e51f2fadf489a03b08c674584619dc8bbf17e80b) | [d9ce2caf](https://api.imd.fun/oracle/requests/d9ce2caf-1824-4d91-a748-906afd40a61c/attestation) | attested | Pending |
+| 5 | What is the ISO 4217 currency code of the Swiss franc? Answer with the three-letter code only. | [0xae8a9938…](https://robinhoodchain.blockscout.com/tx/0xae8a9938f115d3abd9fbd18be911ce746f996b87f3f9094e7d740e8fb9b42926) | [3b7b891b](https://api.imd.fun/oracle/requests/3b7b891b-4bfa-4cf5-b66c-9dc8a016bdb8/attestation) | attested · CHF | Pending |
+
+## Robinhood Chain: first full cycle, ask → attestation → settle → claim (19 Oct 2026)
+
+Market #3 on SwarmMarket `0x6c95a84944b05e7de5000caef80a7c487aa57cb8`: "Was Bitcoin's genesis block mined in January 2009?"
+Opened by the house wallet with the swarm's fee escrowed, house staked NO 0.1 IMD, the demo wallet staked YES 0.1 IMD.
+`resolve` bought the question through AskSwarmRegistry `0xf3a79f962ec1e75f0087af5491a69dee2a869012` (its first ask on Robinhood Chain),
+the swarm answered Yes (11 of 15 agreed), the registry verified the attestation onchain, the keeper settled and the winner claimed.
+
+| step | tx |
+|---|---|
+| open | [0xe98732af…](https://robinhoodchain.blockscout.com/tx/0xe98732af201046d2725828486e4d0b11a8a3b96ccfb85e68eb30b07aa64469c6) |
+| stake NO 0.1 (house) | [0x79558b6b…](https://robinhoodchain.blockscout.com/tx/0x79558b6be4ee8f2653497f29591713eea3553e1cd21ad5f7a731b3a37f8e2c81) |
+| stake YES 0.1 (demo wallet) | [0x1e9b8d83…](https://robinhoodchain.blockscout.com/tx/0x1e9b8d8337c68ed12fa0b8a5b53b9e4e60aa2740cf175d220b5dd04e4060b86a) |
+| resolve = registry ask, 0.5 IMD to Intake v2 | [0xd0427fa2…](https://robinhoodchain.blockscout.com/tx/0xd0427fa2c2ec98eb53e2dc420856d3686ac5d9facbd5b0f000ee37e60c8b6b78) |
+| swarm job / attestation | [explorer job](https://explorer.imd.fun/jobs/8491065c-e0c5-44be-b34c-29ce69545f81) · [attestation](https://api.imd.fun/oracle/requests/4f3a459d-5732-4229-8479-04c1249e5f76/attestation) |
+| Intake completion → onOracleResult (verified) | [0xcd1682a3…](https://robinhoodchain.blockscout.com/tx/0xcd1682a327b7170c63afc01d86ce5e5ac9b23b408829cce536aaf24631d71b71) |
+| settle: Yes | [0xd67f3ca3…](https://robinhoodchain.blockscout.com/tx/0xd67f3ca3912ad4aaf0f502df4b579f83c76835701fa0ab6c5f395eaac2aa9ccd) |
+| claim 0.2 IMD (demo wallet) | [0xfa833582…](https://robinhoodchain.blockscout.com/tx/0xfa833582590612abf77804120b44f1f73f5865ff3bdaafd21faf7dfe4ce15e79) |
+
+Also from Telegram on 19 Oct: two 0.1 IMD YES bets on market #1 by the demo wallet through the Mini App
+([0x7ad2ead9…](https://robinhoodchain.blockscout.com/tx/0x7ad2ead955a8d0f6da24868639f915d048676888f9bb7f57feb6a5994eef6698)), recorded for docs/askswarm-demo.mp4.

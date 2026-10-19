@@ -4,6 +4,7 @@
 // Writes docs/demo/tg.webm and docs/demo/tg-marks.json.
 //   1. Chrome with --remote-debugging-port=9333 and a Telegram Web session (scan the QR once)
 //   2. bun scripts/record-tg.ts [marketId] ["question for /ask"]
+//      CLAIM=<marketId> bun scripts/record-tg.ts   payout clip: All markets → settled market → Claim
 import puppeteer, { type Frame, type Page } from "puppeteer-core";
 import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -91,9 +92,40 @@ await closeApp(); // a Mini App left open would otherwise be restored over the c
 // Telegram's narrow layout can leave the page slid sideways onto the chat list; keep it on the chat.
 await p.evaluate(() => setInterval(() => { for (const e of [document.body, document.documentElement]) if (e.scrollLeft) e.scrollLeft = 0; }, 100));
 await wait(1500);
-const rec = await p.screencast({ path: "docs/demo/tg.webm" as `${string}.webm` });
+const rec = await p.screencast({ path: (process.env.CLAIM ? "docs/demo/tg-claim.webm" : "docs/demo/tg.webm") as `${string}.webm` });
 try {
   mark("chat"); await wait(1500);
+  if (process.env.CLAIM) {
+    const id = process.env.CLAIM;
+    mark("markets");
+    await send("/markets");
+    for (let i = 0; i < 40 && !(await lastButton(/All markets/)); i++) await wait(500);
+    await wait(3000);
+    mark("open");
+    await tap(await lastButton(/All markets/)); await wait(1500);
+    for (const c of await p.$$(".popup-button")) if (/launch|open/i.test(await c.evaluate((e) => e.textContent ?? ""))) { await tap(c); break; }
+    const f = await appFrame();
+    await f.waitForSelector(".cardlink", { visible: true, timeout: 30_000 });
+    await f.evaluate(() => { for (const k of Object.keys(localStorage)) if (/^(wc@2|@appkit|@w3m|WALLETCONNECT|askswarm_wallet_choice)/.test(k)) localStorage.removeItem(k); location.reload(); });
+    await wait(1500);
+    await f.waitForSelector(".cardlink", { visible: true, timeout: 30_000 });
+    await wait(2500);
+    mark("list");
+    const card = `.cardlink[href="?id=${id}&c=${ACTIVE.id}"]`;
+    await f.evaluate((sel) => document.querySelector(sel)?.scrollIntoView({ behavior: "smooth", block: "center" }), card); await wait(2000);
+    await f.evaluate((sel) => (document.querySelector(sel) as HTMLElement).click(), card);
+    await f.waitForSelector("#claim", { visible: true, timeout: 30_000 });
+    await bridge(f); // after the navigation, which resets window
+    mark("settled"); await wait(3500);
+    await f.evaluate(() => { const v = document.querySelector("#vlog"); if (v) v.innerHTML = ""; document.querySelector("#claim")?.scrollIntoView({ behavior: "smooth", block: "center" }); });
+    await wait(1500);
+    await f.evaluate(() => (document.querySelector("#claim") as HTMLElement).click());
+    await f.waitForFunction(() => /Done\./.test(document.querySelector("#vlog")?.textContent ?? "") || !!document.querySelector("#vlog .err"), { timeout: 240_000, polling: 500 });
+    mark("claimed");
+    console.log("log:", await f.evaluate(() => document.querySelector("#vlog")?.textContent?.slice(-400)));
+    bridged = null; await wait(5000);
+    mark("end");
+  } else {
 
   mark("markets");
   await send("/markets");
@@ -138,9 +170,10 @@ try {
   mark("answer");
   await wait(8000);
   mark("end");
+  }
 } finally {
   await rec.stop();
-  writeFileSync("docs/demo/tg-marks.json", JSON.stringify(marks, null, 1));
+  writeFileSync(process.env.CLAIM ? "docs/demo/tg-claim-marks.json" : "docs/demo/tg-marks.json", JSON.stringify(marks, null, 1));
   b.disconnect();
 }
 process.exit(0);
