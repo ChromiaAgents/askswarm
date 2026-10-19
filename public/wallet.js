@@ -1,7 +1,7 @@
 // One wallet entry point for every page: getWallet(C) returns { w, account, kind } ready for viem.
 //
 //  1. A browser wallet (extension or a wallet app's own browser): used directly.
-//  2. AskSwarm wallet: a key made on first use and kept in Telegram's SecureStorage (Keychain /
+//  2. AskSwarm wallet (legacy, kept for wallets already made): a key kept in Telegram's SecureStorage (Keychain /
 //     Keystore) inside the Mini App, else Telegram CloudStorage, else this browser. One-tap bets, no
 //     app switching. The house sends a little gas (and a small starter while it lasts) through
 //     /api/wallet, which only answers Telegram-signed requests. For small amounts: it is a hot key.
@@ -133,6 +133,9 @@ async function viaTelegram(fn) {
   try { return await fn(); } finally { window.open = open; }
 }
 
+// A WalletConnect session from an earlier visit reconnects without the explainer sheet.
+const walletConnectSession = () => { try { return Object.keys(localStorage).some((k) => k.startsWith("wc@2:client") && k.includes("session") && localStorage.getItem(k)?.length > 2); } catch { return false; } };
+
 async function walletConnect(C) {
   const { EthereumProvider } = await import("https://esm.sh/@walletconnect/ethereum-provider@2.23.10");
   const provider = await EthereumProvider.init({
@@ -159,16 +162,16 @@ async function walletConnect(C) {
   return { kind: "walletconnect", w, account, provider, walletLink };
 }
 
-/** Ask which wallet to use. Resolves "askswarm" | "walletconnect". */
-function pick(C) {
+/** Chromia Pay checkout's no-extension screen: say why, then one button opens the WalletConnect modal. */
+function askWalletApp(C) {
   const icons = walletLogos();
   return new Promise((res, rej) => {
-    const el = sheet(`<h3>Choose a wallet</h3><p>Bets are in IMD on ${esc(C.name)}.</p>
-      <button class="opt rec" data-k="askswarm"><img class="lg" src="/logo.svg" alt=""><b>AskSwarm wallet${tg ? " · recommended" : ""}</b><span>${tg ? "Kept in Telegram on this device. Bet in one tap; deposit IMD to play. We cover gas." : "Kept in this browser. Bet in one tap; deposit IMD and a little ETH to play."}</span></button>
-      <button class="opt" data-k="walletconnect"><b>Connect your wallet</b><span>WalletConnect: scan the QR code, or open your wallet app.</span><div class="logos"></div></button>
+    const el = sheet(`<h3>Connect a wallet</h3><p>No wallet in this browser — connect a wallet app instead. On a phone this opens MetaMask, Trust, Rainbow or whichever you pick; on a laptop it shows a code to scan.</p>
+      <div class="logos"></div>
+      <button class="opt rec" data-go><b>Connect a wallet app</b><span>Bets are in IMD on ${esc(C.name)}, with a little ETH there for gas.</span></button>
       <button class="x">Cancel</button>`);
     icons.then((ls) => { const d = el.querySelector(".logos"); if (d && ls.length) d.innerHTML = ls.map((l) => `<img src="${esc(l.img)}" alt="${esc(l.name)}" title="${esc(l.name)}">`).join("") + `<em>+ more</em>`; });
-    el.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => { closeSheet(); res(b.dataset.k); }));
+    el.querySelector("[data-go]").onclick = () => { closeSheet(); res(); };
     el.querySelector(".x").onclick = () => { closeSheet(); rej(new Error("No wallet chosen.")); };
   });
 }
@@ -182,22 +185,19 @@ export function getWallet(C, opts) {
 }
 async function openWallet(C, { log = () => {} } = {}) {
   let s;
+  // Chromia Pay checkout's order: the browser's wallet if there is one, else a wallet app over
+  // WalletConnect. An AskSwarm wallet made earlier keeps working, since it may hold funds.
   if (window.ethereum) s = await injected(C);
-  else {
-    let choice = recall(CHOICE);
-    if (!choice) choice = (await hasEmbedded()) ? "askswarm" : "pick";
-    if (choice === "pick") choice = await pick(C);
-    s = choice === "walletconnect" ? await walletConnect(C) : await embedded(C);
-    remember(CHOICE, s.kind);
-  }
-  if (s.kind === "askswarm") await ensureGas(C, s.account, log);
+  else if (recall(CHOICE) === "askswarm" && (await hasEmbedded())) { s = await embedded(C, { create: false }); await ensureGas(C, s.account, log); }
+  else { if (!(await walletConnectSession())) await askWalletApp(C); s = await walletConnect(C); }
+  remember(CHOICE, s.kind);
   session = { ...s, chainId: C.id };
   window.dispatchEvent(new CustomEvent("askswarm:wallet", { detail: session }));
   return session;
 }
 
-/** Ask again next time (and drop a WalletConnect session); the AskSwarm wallet key stays. */
-export async function switchWallet() { remember(CHOICE, "pick"); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
+/** Forget the wallet in use (and drop a WalletConnect session); an AskSwarm wallet key stays. */
+export async function switchWallet() { remember(CHOICE, null); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
 
 // ---- AskSwarm wallet bar: balance, deposit, withdraw, export ----
 export async function walletBar(el, C) {
