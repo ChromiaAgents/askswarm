@@ -10,7 +10,7 @@
     "approve": "bun scripts/approve-permit2.ts",
     "typecheck": "bunx tsc --noEmit",
     "train:risk": "bun scripts/train-risk.ts",
-    "build": "bun build functions/telegram.ts functions/cpay-webhook.ts functions/imd.ts functions/answers.ts functions/hf-sync.ts functions/wagers.ts functions/markets.ts functions/keeper.ts --outdir dist --target node --format esm --entry-naming '[name].mjs'"
+    "build": "bun build functions/telegram.ts functions/cpay-webhook.ts functions/imd.ts functions/answers.ts functions/hf-sync.ts functions/wagers.ts functions/markets.ts functions/keeper.ts functions/price.ts --outdir dist --target node --format esm --entry-naming '[name].mjs'"
   },
   "dependencies": {
     "@vercel/functions": "^3.10.1",
