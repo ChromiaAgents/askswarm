@@ -11,7 +11,7 @@ for (const [i, t] of ["/start", "/markets"].entries()) {
   const r = await fetch(`${BASE}/api/telegram`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify(upd(t, i)) });
   console.log(t, r.status, await r.text());
 }
-const q = "What is the ISO 4217 currency code of the Danish krone? Answer with the three-letter code only.";
+const q = process.env.E2E_Q ?? "What is the ISO 4217 currency code of the Danish krone? Answer with the three-letter code only.";
 const card = await (await fetch(`${TG}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: chat, text: `❓ ${q}\n(test: paid with CHR via Chromia Pay sandbox, webhook simulated)` }) })).json();
 if (!card.ok) { console.log("cannot message this chat:", card.description); process.exit(1); }
 const event = { id: "evt_test_" + Date.now(), object: "event", type: "payment.confirmed", created: Math.floor(Date.now() / 1000),
