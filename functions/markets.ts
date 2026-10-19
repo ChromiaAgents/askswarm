@@ -2,7 +2,7 @@
 // ponytail: 60s cache per instance, events are the index.
 import { createPublicClient, http, parseAbi, hexToString, type Hex } from "viem";
 import { mainnet } from "viem/chains";
-import { getLogsChunked } from "../lib/logs";
+import { getLogsChunked, getBlockTs } from "../lib/logs";
 
 export const maxDuration = 30;
 const MARKET = (process.env.MARKET_ADDRESS ?? "").toLowerCase() as Hex;
@@ -32,7 +32,7 @@ export async function GET() {
     // Timestamps for the chart: one getBlock per distinct block (few per market).
     const blocks = [...new Set((logs as any[]).map((l) => l.blockNumber as bigint))];
     const ts = new Map<bigint, number>();
-    await Promise.all(blocks.map(async (b) => ts.set(b, Number((await pub.getBlock({ blockNumber: b })).timestamp))));
+    await Promise.all(blocks.map(async (b) => ts.set(b, await getBlockTs(b))));
     for (const l of logs as any[]) {
       const a = l.args, id = String(a.id), t = ts.get(l.blockNumber) ?? 0;
       if (l.eventName === "Opened") {
