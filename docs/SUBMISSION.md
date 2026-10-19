@@ -11,14 +11,20 @@ project, cannot be edited afterwards, prize paid to the contract's deployer addr
 | Launched through the IMD protocol during the build period | Done on **Robinhood Chain**: [launch #2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) audited, fixed two findings, tested and deployed all three contracts in one launch (job [dffc8efb](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82)). Earlier on Ethereum: [launch #2088](https://explorer.imd.fun/jobs/64fa31ee-3f0c-493f-b7ad-b2d93eb8b852) then [launch #2099](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0) from the monorepo (job [1d47e02c](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0)). Swarm audited, fixed five findings across the two rounds, tested, deployed. |
 | v4 hook or custom contract that really uses IMD | AskSwarmRegistry on Robinhood Chain `0xf3a79f962ec1e75f0087af5491a69dee2a869012` (Ethereum: `0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`): pays Intake v2, receives `onOracleResult`, verifies the attestation onchain, stores it by questionHash. |
 | Dedicated X account | Using [@Eval_Engine](https://x.com/Eval_Engine) (Johnson's call). To do: add AskSwarm + bot link to the bio, pin post 1, then posts 2 and 3. |
+| Source verified | Sourcify, all three Robinhood contracts (19 Oct). |
 | Submitted via IMD Radar | **TODO**: form needs project X handle, contract address (use the Robinhood Chain registry `0xf3a79f962ec1e75f0087af5491a69dee2a869012`), blurb below. |
 
 Prize wallet: the launch's literal deployer is IMD's factory wallet, so name ours in the blurb like
 other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
-## Radar blurb (≤1000 chars incl. the full prize wallet address; replace the zero address)
+## Radar blurb (≤1000 chars incl. the full prize wallet address)
 
-AskSwarm turns the IMD oracle into something people and contracts use, live on Robinhood Chain. AskSwarmRegistry pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash for any contract to read. SwarmMarket runs yes/no prediction markets on it: stake IMD, the verified answer pays the winners, 2% of the losing side goes to the creator and to free asks. SwarmWager does 1v1 bets. A keeper opens daily ETH and BTC rounds and settles them. All three were audited and deployed by the swarm in IMD launch #2223 (first on Ethereum, #2099/#2190/#2189). Telegram bot: /ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD; 6.7k past answers free; split-risk model from 7.8k IMD requests. Answers flow back into the open Eval Engine dataset. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x0000000000000000000000000000000000000000
+All about IMD: judges read this first. Fill {N} {M} {K} {TX} from docs/EVIDENCE.md after markets #1/#2 settle
+(~01:30 UTC 20 Oct) and the evidence batch; with a 66-char tx it is ~971 chars. Replace the zero address with
+Johnson's prize wallet. Contract field: `0xf3a79f962ec1e75f0087af5491a69dee2a869012`. Submit by the evening of
+20 Oct: entries cannot be edited.
+
+AskSwarm makes the IMD oracle usable by people and by other contracts, live on Robinhood Chain. Entered contract: AskSwarmRegistry, audited and deployed by the swarm in IMD launch #2223, source verified on Sourcify. ask() pays 0.5 IMD to Intake v2 with itself as callback; onOracleResult checks the swarm's EIP-712 attestation onchain and stores the answer by questionHash for any contract to read. SwarmMarket and SwarmWager escrow IMD and pay out only on a verified answer, no owner, nobody picks the outcome. Try it in 60s: t.me/askswarm_bot, new players get gas so a first bet is one tap. Proof: {N} asks and {M} bets from {K} wallets on Robinhood; full cycle ask > attestation > settle: robinhoodchain.blockscout.com/tx/{TX}. Live: askswarm-nine.vercel.app. Earlier on Ethereum (#2099): 14 answers, 13 verified. Code: github.com/ChromiaAgents/askswarm. Prize wallet 0x0000000000000000000000000000000000000000
 
 ## X posts
 

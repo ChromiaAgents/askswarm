@@ -46,5 +46,5 @@ if (outcome.status !== "attested") process.exit(1);
 const att = await imd.pollUntil(() => imd.attestation(requestId!), (a) => a !== null, { every: 5000, timeoutMs: 5 * 60_000 });
 const valid = await imd.verifyAttestation(att!);
 step("attestation", { valid, signer: att!.signer, answer: att!.message.answer, figure: att!.message.figure, agreed: att!.message.agreed, quorum: att!.message.quorum });
-console.log(`tx: https://${CHAIN === 1 ? "" : "sepolia."}etherscan.io/tx/${tx}\nattestation: ${imd.IMD_API}/oracle/requests/${requestId}/attestation`);
+console.log(`tx: ${CHAIN === 4663 ? "https://robinhoodchain.blockscout.com" : `https://${CHAIN === 1 ? "" : "sepolia."}etherscan.io`}/tx/${tx}\nattestation: ${imd.IMD_API}/oracle/requests/${requestId}/attestation`);
 process.exit(valid ? 0 : 1);

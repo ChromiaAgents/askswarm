@@ -13,6 +13,8 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 
 **Live on Robinhood Chain** (chain id 4663). All three contracts shipped in one IMD launch, [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82), whose audit added two fixes (below). The first deployment on Ethereum stays live and readable; the site, bot and keeper read both chains and put everything new on Robinhood Chain.
 
+Source for all three Robinhood Chain contracts is verified on Sourcify ([registry](https://repo.sourcify.dev/4663/0xf3a79f962ec1e75f0087af5491a69dee2a869012), [market](https://repo.sourcify.dev/4663/0x6c95a84944b05e7de5000caef80a7c487aa57cb8), [wager](https://repo.sourcify.dev/4663/0xd237dd7564edb7a026613ebb6da31da0292af96c)), built from the launch repo with solc 0.8.26, via-IR, 2,000 runs.
+
 | contract | Robinhood Chain (current) | Ethereum (first) |
 |---|---|---|
 | AskSwarmRegistry | [`0xf3a79f96…869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) · [#2223](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82) | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) · [#2099](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0) |
