@@ -49,9 +49,10 @@ const closeSheet = () => document.querySelector(".sw-sheet")?.remove();
 // ---- key storage: Telegram SecureStorage → CloudStorage → this browser ----
 // Older Telegram clients (and plain browsers that load telegram-web-app.js) never call back: time out.
 const within = (p, ms, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
-// null only when storage says "empty"; undefined = unknown (no answer in time, or an error).
+// null only when storage says "empty" (or UNSUPPORTED: this client, e.g. Telegram Web, keeps nothing
+// there); undefined = unknown (no answer in time, or any other error).
 // SecureStorage's third argument says the key exists but must be restored (new device): ask for it.
-const tgGet = (api, k) => within(new Promise((res) => { try { api.getItem(k, (err, v, canRestore) => res(err ? undefined : v || (canRestore ? "restore" : null))); } catch { res(undefined); } }), 2500, undefined);
+const tgGet = (api, k) => within(new Promise((res) => { try { api.getItem(k, (err, v, canRestore) => res(err ? (/UNSUPPORTED/.test(String(err)) ? null : undefined) : v || (canRestore ? "restore" : null))); } catch { res(undefined); } }), 2500, undefined);
 const tgRestore = (k) => within(new Promise((res) => { try { secure.restoreItem(k, (err, v) => res(err ? undefined : v || undefined)); } catch { res(undefined); } }), 120_000, undefined);
 const tgSet = (api, k, v) => within(new Promise((res) => { try { api.setItem(k, v, (err, ok) => res(!err && ok !== false)); } catch { res(false); } }), 2500, false);
 async function loadKey() {
