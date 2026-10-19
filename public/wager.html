@@ -53,6 +53,7 @@
 <div class="wrap">
   <h1>Settle it with the <span>swarm</span></h1>
   <p class="sub">Two people stake IMD on a yes/no question. After the deadline, anyone asks the IMD swarm through AskSwarmRegistry, and the contract pays whoever the verified answer says was right. Split panel or no answer: both stakes back.</p>
+  <div id="wbar"></div>
   <div id="view"></div>
   <div id="create" class="card" hidden>
     <label for="q">Yes/no question</label>
@@ -75,6 +76,7 @@
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex } from "https://esm.sh/viem@2.57.7";
   import { chainMap, viemChain, pubFor, switchTo, addr as addrLink, tx as txLink, badge } from "/chain.js";
+  import { getWallet, walletBar } from "/wallet.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -95,30 +97,13 @@
   const fmt = (ts) => new Date(Number(ts) * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
 
-  async function wallet() {
-    if (!window.ethereum) {
-      // Telegram's webview and plain mobile browsers have no injected wallet: open this exact page
-      // inside a wallet app's own browser, where the wallet is injected and betting works.
-      const here = location.href, host = location.host + location.pathname + location.search;
-      const links = { MetaMask: `https://metamask.app.link/dapp/${host}`, "Trust Wallet": `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(here)}`, "Coinbase Wallet": `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(here)}` };
-      const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
-      let box = document.getElementById("walletpick");
-      if (!box) { box = document.createElement("div"); box.id = "walletpick"; box.className = "card"; document.querySelector(".wrap").prepend(box); }
-      box.innerHTML = `<b>Open in your wallet to bet</b><div class="meta" style="margin:4px 0 10px">This browser has no wallet. Pick your wallet app; it opens this same page with your wallet connected.</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(links).map(([n, u]) => `<button data-u="${u}">${n}</button>`).join("")}<button data-copy="1">Copy link</button></div>`;
-      box.querySelectorAll("button").forEach((b) => (b.onclick = () => { if (b.dataset.copy) { navigator.clipboard?.writeText(here); b.textContent = "Copied"; return; } tg ? tg.openLink(b.dataset.u) : (location.href = b.dataset.u); }));
-      box.scrollIntoView({ behavior: "smooth", block: "start" });
-      throw new Error("Open this page in your wallet app to sign (options above).");
-    }
-    const w = createWalletClient({ chain: viemChain(C), transport: custom(window.ethereum) });
-    const [account] = await w.requestAddresses();
-    await switchTo(w, C);
-    return { w, account };
-  }
+  // Browser wallet, AskSwarm wallet (Telegram) or WalletConnect: see /wallet.js.
+  const wallet = () => getWallet(C);
   async function ensureAllowance(w, account, imd, amount, log) {
     const a = await pub.readContract({ address: imd, abi: erc20Abi, functionName: "allowance", args: [account, WAGER] });
     if (a >= amount) return;
     log("Approve IMD in your wallet…");
-    const h = await w.writeContract({ account, address: imd, abi: erc20Abi, functionName: "approve", args: [WAGER, amount] });
+    const h = await w.writeContract({ account: w.account || account, address: imd, abi: erc20Abi, functionName: "approve", args: [WAGER, amount] });
     await pub.waitForTransactionReceipt({ hash: h });
   }
   const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
@@ -156,7 +141,7 @@
         const { w: wc, account } = await wallet();
         if (action[0] === "join") await ensureAllowance(wc, account, IMD, w.stake, log);
         log("Confirm in your wallet…");
-        const h = await wc.writeContract({ account, address: WAGER, abi: wagerAbi, functionName: action[0], args: [BigInt(id)] });
+        const h = await wc.writeContract({ account: wc.account || account, address: WAGER, abi: wagerAbi, functionName: action[0], args: [BigInt(id)] });
         await pub.waitForTransactionReceipt({ hash: h });
         log("Done.", "ok"); setTimeout(() => showWager(id), 1500);
       } catch (e) { log(e?.shortMessage || e?.message || String(e), "err"); $("#act").disabled = false; }
@@ -186,7 +171,7 @@
       await ensureAllowance(w, account, IMD, stake + fee, log);
       const now = Math.floor(Date.now() / 1000), joinBy = now + Number($("#join").value), after = Math.max(joinBy, Math.floor(new Date($("#after").value).getTime() / 1000));
       log(`Stake ${formatEther(stake)} IMD + swarm fee ${formatEther(fee)} IMD. Confirm in your wallet…`);
-      const h = await w.writeContract({ account, address: WAGER, abi: wagerAbi, functionName: "create", args: [stringToHex(JSON.stringify(draft)), side, stake, BigInt(joinBy), BigInt(after)] });
+      const h = await w.writeContract({ account: w.account || account, address: WAGER, abi: wagerAbi, functionName: "create", args: [stringToHex(JSON.stringify(draft)), side, stake, BigInt(joinBy), BigInt(after)] });
       const rc = await pub.waitForTransactionReceipt({ hash: h });
       const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === WAGER.toLowerCase()).topics[1]);
       log(`Wager #${id} created. Send the link to your counterparty.`, "ok");
@@ -200,6 +185,7 @@
     $("#list").innerHTML = rows.length ? rows.map((r) => `<div class="card">${badge(CH[r.chainId || 1])} <span class="pill ${r.state}">${r.state}</span> <a href="?id=${r.id}&c=${r.chainId || 1}" class="q" style="color:inherit">${esc(r.question)}</a><div class="meta">#${r.id} · ${formatEther(BigInt(r.stake))} IMD each${r.answer ? " · swarm said " + r.answer : ""}</div></div>`).join("") : "";
   }
 
+  walletBar($("#wbar"), C); window.addEventListener("askswarm:wallet", () => walletBar($("#wbar"), C));
   if (!WAGER) $("#view").innerHTML = `<div class="card">The wager contract is being launched through IMD. Check back shortly.</div>`;
   else if (P.get("id")) await showWager(P.get("id"));
   else { $("#create").hidden = false; if (P.get("q")) { $("#q").value = P.get("q"); checkQ(); } list(); }

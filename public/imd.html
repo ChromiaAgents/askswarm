@@ -19,6 +19,7 @@
   .ok{color:#2e8b2b}.err{color:#c2185b}
   a{color:#9E5ECF}
 </style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 <div class="card">
@@ -33,6 +34,7 @@
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, formatUnits } from "https://esm.sh/viem@2.57.7";
   import { viemChain, switchTo, tx as txLink } from "/chain.js";
+  import { getWallet } from "/wallet.js";
 
   const P = new URLSearchParams(location.search);
   const params = { c: P.get("c"), m: P.get("m"), q: P.get("q"), s: P.get("s") };
@@ -51,24 +53,16 @@
   $("chainline").textContent = `From your own wallet on ${CHAIN.name}. The signed attestation is addressed to you.`;
   $("draft").textContent = `${draft.request.answerType} · panel ${draft.request.panelSize}, quorum ${draft.request.quorum} · costs 0.5 IMD + gas, not refunded if the panel splits`;
 
-  if (!window.ethereum) {
-    $("go").textContent = "No wallet found";
-    log("Open this page inside a wallet browser (MetaMask, Rabby) or on desktop with a wallet extension.", "err");
-    const a = document.createElement("a"); a.href = location.href; a.textContent = "Copy this link into your wallet's browser";
-    a.onclick = (e) => { e.preventDefault(); navigator.clipboard?.writeText(location.href); log("Link copied."); }; $("log").appendChild(a);
-  } else {
-    $("go").disabled = false;
-  }
+  $("go").disabled = false;
+  $("go").textContent = "Pay 0.5 IMD and ask";
 
   $("go").onclick = async () => {
     const btn = $("go"); btn.disabled = true;
     try {
-      const wallet = createWalletClient({ chain: viemChain(CHAIN), transport: custom(window.ethereum) });
+      // Browser wallet, AskSwarm wallet (Telegram) or WalletConnect: see /wallet.js.
+      const { w: wallet, account } = await getWallet(CHAIN, { log });
       const pub = createPublicClient({ chain: viemChain(CHAIN), transport: http(CHAIN.rpc) });
-      const [account] = await wallet.requestAddresses();
       log(`Wallet ${account.slice(0, 6)}…${account.slice(-4)}`);
-      if ((await wallet.getChainId()) !== CHAIN.id) { btn.textContent = `Switch to ${CHAIN.name}…`; await switchTo(wallet, CHAIN); }
-
       const amount = BigInt(draft.amount);
       // Through AskSwarmRegistry when deployed: the answer then lands onchain, verified, for everyone.
       const spender = draft.registry || draft.intake;
@@ -80,14 +74,14 @@
 
       if (allowance < amount) {
         btn.textContent = "Approve 0.5 IMD…";
-        const h = await wallet.writeContract({ account, address: draft.asset, abi: erc20Abi, functionName: "approve", args: [spender, amount] });
+        const h = await wallet.writeContract({ account: wallet.account || account, address: draft.asset, abi: erc20Abi, functionName: "approve", args: [spender, amount] });
         log("Approve sent, waiting…"); await pub.waitForTransactionReceipt({ hash: h }); log("Approved.", "ok");
       }
 
       btn.textContent = "Confirm request in wallet…";
       const tx = draft.registry
-        ? await wallet.writeContract({ account, address: draft.registry, abi: registryAbi, functionName: "ask", args: [draft.args.body] })
-        : await wallet.writeContract({ account, address: draft.intake, abi: intakeAbi, functionName: "request",
+        ? await wallet.writeContract({ account: wallet.account || account, address: draft.registry, abi: registryAbi, functionName: "ask", args: [draft.args.body] })
+        : await wallet.writeContract({ account: wallet.account || account, address: draft.intake, abi: intakeAbi, functionName: "request",
             args: [draft.args.action, draft.args.body, draft.args.callback, draft.asset, amount] });
       log(`Request sent: ${tx.slice(0, 10)}… waiting for confirmation.`);
       const rcpt = await pub.waitForTransactionReceipt({ hash: tx });

@@ -146,6 +146,7 @@
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex, hexToString } from "https://esm.sh/viem@2.57.7";
   import { chainMap, viemChain, pubFor, switchTo, tx as txLink, addr as addrLink, badge } from "/chain.js";
+  import { getWallet, walletBar, openDeposit } from "/wallet.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -185,32 +186,16 @@
   const fx = (m) => (m >= 100 ? "100×+" : m.toFixed(2) + "×");
   const bar = (y, n, final) => { const t = Number(y) + Number(n); const p = t ? Math.round(Number(y) * 100 / t) : 50; return (final ? `<div class="meta" style="margin-top:8px">final pool split</div>` : "") + `<div class="bar"><div class="y" style="width:${Math.max(p, 12)}%">YES ${p}%</div><div class="n">${100 - p}% NO</div></div>`; };
   const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
-  async function wallet() {
-    if (!window.ethereum) {
-      // Telegram's webview and plain mobile browsers have no injected wallet: open this exact page
-      // inside a wallet app's own browser, where the wallet is injected and betting works.
-      const here = location.href, host = location.host + location.pathname + location.search;
-      const links = { MetaMask: `https://metamask.app.link/dapp/${host}`, "Trust Wallet": `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(here)}`, "Coinbase Wallet": `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(here)}` };
-      const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
-      let box = document.getElementById("walletpick");
-      if (!box) { box = document.createElement("div"); box.id = "walletpick"; box.className = "card"; document.querySelector(".wrap").prepend(box); }
-      box.innerHTML = `<b>Open in your wallet to bet</b><div class="meta" style="margin:4px 0 10px">This browser has no wallet. Pick your wallet app; it opens this same page with your wallet connected.</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(links).map(([n, u]) => `<button data-u="${u}">${n}</button>`).join("")}<button data-copy="1">Copy link</button></div>`;
-      box.querySelectorAll("button").forEach((b) => (b.onclick = () => { if (b.dataset.copy) { navigator.clipboard?.writeText(here); b.textContent = "Copied"; return; } tg ? tg.openLink(b.dataset.u) : (location.href = b.dataset.u); }));
-      box.scrollIntoView({ behavior: "smooth", block: "start" });
-      throw new Error("Open this page in your wallet app to sign (options above).");
-    }
-    const w = createWalletClient({ chain: viemChain(C), transport: custom(window.ethereum) });
-    const [account] = await w.requestAddresses();
-    await switchTo(w, C);
-    return { w, account };
-  }
+  // Browser wallet, AskSwarm wallet (Telegram) or WalletConnect: see /wallet.js.
+  let wlog = () => {};
+  const wallet = () => getWallet(C, { log: (t, c) => wlog(t, c) });
   async function allow(w, account, amount, log) {
     const a = await pub.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [account, M] });
     if (a >= amount) return;
     log("Approve IMD in your wallet…");
-    await pub.waitForTransactionReceipt({ hash: await w.writeContract({ account, address: IMD, abi: erc20Abi, functionName: "approve", args: [M, amount] }) });
+    await pub.waitForTransactionReceipt({ hash: await w.writeContract({ account: w.account || account, address: IMD, abi: erc20Abi, functionName: "approve", args: [M, amount] }) });
   }
-  const send = async (w, account, fn, args, log) => { log("Confirm in your wallet…"); const h = await w.writeContract({ account, address: M, abi: mAbi, functionName: fn, args }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
+  const send = async (w, account, fn, args, log) => { log("Confirm in your wallet…"); const h = await w.writeContract({ account: w.account || account, address: M, abi: mAbi, functionName: fn, args }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
 
   if (data.stats) $("#stats").innerHTML = `<span class="pill">⛓ ${esc(CH[ACTIVE].name)}</span><span class="pill">${data.stats.markets} markets</span><span class="pill">${data.stats.traders} traders</span><span class="pill">${imd(data.stats.volume)} IMD staked</span><span class="pill">${imd(data.stats.fees)} IMD fees</span>`;
 
@@ -360,6 +345,7 @@
       : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, paid out automatically</span></div>` : "";
     const k1 = mults(m.yesPool, m.noPool, 0.01);
     $("#view").innerHTML = `<div class="mk">
+      <div id="wbar"></div>
       <div class="mmeta">${badge(C)} <span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets${row.voidRiskBps != null ? ` · ${row.voidRiskBps < 1000 ? "🟢" : row.voidRiskBps < 2500 ? "🟡" : "🔴"} refund risk ${Math.round(row.voidRiskBps / 100)}%` : ""}</span></div>
       <h2 class="mt">${esc(T)}</h2>
       ${status}
@@ -382,9 +368,10 @@
       ${row.voidRiskBps != null ? `<p>Refund risk ${Math.round(row.voidRiskBps / 100)}%: the chance the swarm splits and everyone is refunded, from a model trained on 7,800 past IMD oracle requests (<a href="https://huggingface.co/datasets/evalengine/imd-oracle-outcomes">Eval Engine dataset</a>). Every settled market is written back into that dataset.</p>` : ""}
       <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} on ${C.name} · <a href="${addrLink(C, M)}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id + "&c=" + C.id)}" target="_blank">share on X</a></p>`;
 
-    const log = logger($("#vlog"));
+    const log = logger($("#vlog")); wlog = log;
+    walletBar($("#wbar"), C); window.addEventListener("askswarm:wallet", () => walletBar($("#wbar"), C));
     const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
-    const run = (fn, btn) => async () => { if (btn) btn.disabled = true; try { await fn(); log("Done.", "ok"); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); if (btn) btn.disabled = false; } };
+    const run = (fn, btn) => async () => { if (btn) btn.disabled = true; try { await fn(); log("Done.", "ok"); walletBar($("#wbar"), C); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); if (btn) btn.disabled = false; } };
     if (canStake) {
       let side = true;
       const amt = () => Number($("#amt").value) || 0;
@@ -393,7 +380,9 @@
       document.querySelectorAll(".side").forEach((b) => (b.onclick = () => { side = b.dataset.s === "1"; document.querySelectorAll(".side").forEach((x) => x.classList.toggle("on", x === b)); upd(); tg?.HapticFeedback?.selectionChanged(); }));
       document.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => { $("#amt").value = b.dataset.v; document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", x === b)); upd(); }));
       $("#amt").oninput = () => { document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", Number(x.dataset.v) === amt())); upd(); };
-      const doBet = run(async () => { const { w, account } = await wallet(); const a = parseEther(String(amt())); await allow(w, account, a, log); await send(w, account, "stake", [BigInt(id), side, a], log); }, $("#cta"));
+      const doBet = run(async () => { const { w, account, kind } = await wallet(); const a = parseEther(String(amt()));
+        const have = await pub.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [account] });
+        if (have < a) { if (kind === "askswarm") openDeposit(C, account); throw new Error(`You have ${imd(have)} IMD on ${C.name}; this bet needs ${amt()}. Deposit IMD to play.`); } await allow(w, account, a, log); await send(w, account, "stake", [BigInt(id), side, a], log); }, $("#cta"));
       $("#cta").onclick = doBet;
       if (tg) { $("#cta").hidden = true; tg.MainButton.onClick(doBet); }
       upd();
