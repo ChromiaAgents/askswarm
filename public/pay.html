@@ -27,7 +27,14 @@
               new URLSearchParams(location.search).get("tgWebAppStartParam") ||
               new URLSearchParams(location.search).get("cs");
   if (tg) { tg.ready(); tg.expand(); }
-  if (param && /^cs_(test|live)_[0-9a-f]{32}$/.test(param)) {
+  // Same Mini App also routes into the site: m<id> market, w<id> wager, "markets", "answers".
+  var route = null, mm;
+  if (param && (mm = param.match(/^m(\d{1,9})$/))) route = "/market?id=" + mm[1];
+  else if (param && (mm = param.match(/^w(\d{1,9})$/))) route = "/wager?id=" + mm[1];
+  else if (param === "markets") route = "/market";
+  else if (param === "answers") route = "/answers";
+  if (route) { document.getElementById("msg").textContent = "Opening AskSwarm…"; location.replace(route); }
+  else if (param && /^cs_(test|live)_[0-9a-f]{32}$/.test(param)) {
     var url = "https://pay-checkout.chromia.com/c/pay/" + param;
     document.getElementById("link").href = url;
     document.getElementById("fallback").hidden = false;

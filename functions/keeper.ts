@@ -6,6 +6,7 @@
 // ponytail: scans all ids each run; fine below a few hundred markets, index by events beyond that.
 import { createPublicClient, createWalletClient, http, parseAbi, erc20Abi, stringToHex, hexToString, parseEther, type Hex } from "viem";
 import * as imd from "../packages/imd/src/index";
+import { announceOpened, announceSettled } from "../lib/announce";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 
@@ -86,6 +87,7 @@ export async function runKeeper(): Promise<Act[]> {
         const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase())!.topics[1]!);
         if (SEED > 0n) { await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, true, SEED] }); await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, false, SEED] }); }
         acts.push({ contract: "market", id: Number(id), fn: `daily ${pair} > ${Math.round(price)}`, tx: h });
+        await announceOpened(Number(id), chk.request.question, Number(closeAt), true);
       } catch (e: any) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
     }
   }
@@ -98,6 +100,14 @@ export async function runKeeper(): Promise<Act[]> {
         if (now >= m.resolveAfter && now <= m.resolveAfter + win) await tryCall("market", M, marketAbi, "resolve", i);
         else if (now > m.resolveAfter + win) await tryCall("market", M, marketAbi, "abandon", i);
       } else if (m.phase === 2) await tryCall("market", M, marketAbi, "settle", i); // Asked
+      const done = acts[acts.length - 1];
+      if (done && done.contract === "market" && done.id === Number(i) && done.tx && (done.fn === "settle" || done.fn === "abandon" || done.fn === "resolve")) {
+        const [after, body] = await pub.readContract({ address: M, abi: marketAbi, functionName: "get", args: [i] });
+        let q = ""; try { q = JSON.parse(hexToString(body)).question; } catch {}
+        const yes = Number(after.yesPool) / 1e18, no = Number(after.noPool) / 1e18;
+        if (after.phase === 3 || after.phase === 4) await announceSettled(Number(i), q, after.phase === 3 ? "yes" : "no", `Pool ${(yes + no).toFixed(2)} IMD.`);
+        else if (after.phase === 5) await announceSettled(Number(i), q, "void", yes === 0 || no === 0 ? "only one side bet" : "the swarm did not reach a verdict");
+      }
     }
   }
   const W = process.env.WAGER_ADDRESS as Hex | undefined;

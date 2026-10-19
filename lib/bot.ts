@@ -11,6 +11,7 @@ import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
 import { recall } from "./recall";
 import { quickTake } from "./quick";
+import { marketTitle, miniAppLink } from "./announce";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
@@ -274,8 +275,30 @@ bot.command("bet", async (ctx) => {
   const url = `${BASE_URL}/${market ? "market" : "wager"}?q=${encodeURIComponent(q)}`;
   return ctx.reply(`🎲 <b>${esc(q)}</b>\n${market ? "Open a market: anyone stakes IMD on Yes or No, the swarm's verified answer pays the winning side, a split panel refunds everyone." : "Stake IMD on your side. Whoever the swarm's verified answer says was right takes the pot; a split panel refunds both."}`, {
     parse_mode: "HTML", reply_parameters: { message_id: ctx.msg.message_id },
-    reply_markup: new InlineKeyboard().url(market ? "Open the market" : "Open the wager", url),
+    // Private chats can open web_app buttons directly; groups only allow URLs, so they get the page link.
+    reply_markup: ctx.chat.type === "private" ? new InlineKeyboard().webApp(market ? "Open the market" : "Open the wager", url) : new InlineKeyboard().url(market ? "Open the market" : "Open the wager", url),
   });
+});
+
+// /markets: open rounds with odds and what 1 IMD pays, each opening inside the Mini App.
+bot.command("markets", async (ctx) => {
+  let rows: any[] = [];
+  try { rows = (await (await fetch(`${BASE_URL}/api/markets`, { signal: AbortSignal.timeout(8000) })).json()).rows ?? []; } catch {}
+  const now = Date.now() / 1000;
+  const open = rows.filter((r) => r.phase === "open" && now < r.closeAt).slice(0, 6);
+  const kb = new InlineKeyboard();
+  const priv = ctx.chat.type === "private";
+  const go = (label: string, id?: string) => priv ? kb.webApp(label, `${BASE_URL}/market${id ? `?id=${id}` : ""}`) : kb.url(label, miniAppLink(id ? `m${id}` : "markets"));
+  if (!open.length) { go("Open a market"); return ctx.reply("No open markets right now. Open one with /bet <yes/no question>.", { reply_markup: kb }); }
+  const lines = open.map((r) => {
+    const y = Number(r.yesPool) / 1e18, n = Number(r.noPool) / 1e18, pct = y + n ? Math.round((y * 100) / (y + n)) : 50;
+    const daily = r.openedAt && new Date(r.openedAt * 1000).toISOString().slice(0, 10) === new Date((r.closeAt - 3600) * 1000).toISOString().slice(0, 10);
+    const hrs = Math.max(1, Math.round((r.closeAt - now) / 3600));
+    go(`#${r.id} · YES ${pct}%`, r.id); kb.row();
+    return `🎲 <b>#${r.id}</b> ${esc(marketTitle(r.question, !!daily))}\n   YES ${pct}% · ${(y + n).toFixed(2)} IMD · closes in ${hrs}h`;
+  });
+  go("All markets");
+  return ctx.reply(`<b>Open markets</b>, settled by the IMD swarm:\n\n${lines.join("\n\n")}`, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
 });
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));

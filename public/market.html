@@ -78,6 +78,16 @@
   td,th{text-align:left;padding:5px 4px;border-bottom:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}
   th{color:var(--muted);font-weight:400}
 </style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+  // Inside Telegram: full height, native back button, no "Open bot" (we are in it).
+  (function () {
+    var tg = window.Telegram && Telegram.WebApp; if (!tg || !tg.initData) return;
+    document.documentElement.classList.add("in-tg"); tg.ready(); tg.expand();
+    if (new URLSearchParams(location.search).get("id")) { tg.BackButton.show(); tg.BackButton.onClick(function () { location.href = location.pathname; }); }
+  })();
+</script>
+<style>.in-tg .sw-cta{display:none}</style>
 <script src="/nav.js" defer></script>
 </head>
 <body>
@@ -140,7 +150,19 @@
   const bar = (y, n, final) => { const t = Number(y) + Number(n); const p = t ? Math.round(Number(y) * 100 / t) : 50; return (final ? `<div class="meta" style="margin-top:8px">final pool split</div>` : "") + `<div class="bar"><div class="y" style="width:${Math.max(p, 12)}%">YES ${p}%</div><div class="n">${100 - p}% NO</div></div>`; };
   const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
   async function wallet() {
-    if (!window.ethereum) throw new Error("No wallet in this browser. Open the page in MetaMask or Rabby, or on desktop with the extension.");
+    if (!window.ethereum) {
+      // Telegram's webview and plain mobile browsers have no injected wallet: open this exact page
+      // inside a wallet app's own browser, where the wallet is injected and betting works.
+      const here = location.href, host = location.host + location.pathname + location.search;
+      const links = { MetaMask: `https://metamask.app.link/dapp/${host}`, "Trust Wallet": `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(here)}`, "Coinbase Wallet": `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(here)}` };
+      const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+      let box = document.getElementById("walletpick");
+      if (!box) { box = document.createElement("div"); box.id = "walletpick"; box.className = "card"; document.querySelector(".wrap").prepend(box); }
+      box.innerHTML = `<b>Open in your wallet to bet</b><div class="meta" style="margin:4px 0 10px">This browser has no wallet. Pick your wallet app; it opens this same page with your wallet connected.</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(links).map(([n, u]) => `<button data-u="${u}">${n}</button>`).join("")}<button data-copy="1">Copy link</button></div>`;
+      box.querySelectorAll("button").forEach((b) => (b.onclick = () => { if (b.dataset.copy) { navigator.clipboard?.writeText(here); b.textContent = "Copied"; return; } tg ? tg.openLink(b.dataset.u) : (location.href = b.dataset.u); }));
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+      throw new Error("Open this page in your wallet app to sign (options above).");
+    }
     const w = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
     const [account] = await w.requestAddresses();
     if ((await w.getChainId()) !== 1) await w.switchChain({ id: 1 });
