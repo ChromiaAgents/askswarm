@@ -14,7 +14,7 @@
     .sw-nav .sw-in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:18px;height:62px}
     .sw-nav .sw-brand{display:flex;align-items:center;gap:10px;font:700 18px "NB International",Helvetica,Arial,sans-serif;color:var(--ink,#1F1A23);text-decoration:none;white-space:nowrap}
     .sw-nav .sw-brand img{width:34px;height:34px;border-radius:9px}
-    .sw-nav .sw-links{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1}
+    .sw-nav .sw-links{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
     .sw-nav .sw-links::-webkit-scrollbar{display:none}
     .sw-nav .sw-links a{font:700 14px "NB International",Helvetica,Arial,sans-serif;color:var(--ink,#1F1A23);text-decoration:none;padding:7px 12px;border-radius:999px;border:2px solid transparent;white-space:nowrap}
     .sw-nav .sw-links a:hover{border-color:var(--ink,#1F1A23)}
