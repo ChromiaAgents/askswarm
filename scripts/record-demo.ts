@@ -89,7 +89,7 @@ try {
   await page.goto(BASE + "/answers", { waitUntil: "networkidle2" });
   await page.waitForSelector(".card .a", { timeout: 30_000 });
   await wait(1500);
-  await page.type("#q", "CHF", { delay: 160 }); await wait(2500);
+  await page.type("#q", "Argentina", { delay: 160 }); await wait(2500);
   await page.evaluate(() => { (document.querySelector("#q") as HTMLInputElement).value = ""; document.querySelector("#q")!.dispatchEvent(new Event("input")); });
   await smoothScroll(900, 2500); await wait(1500);
 
