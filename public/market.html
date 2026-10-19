@@ -440,10 +440,12 @@
     if (["yes", "no"].includes(r.phase)) { add(r.creator, 50); for (const x of r.claims || []) { const st = (r.trades || []).filter((t) => t.user === x.user && t.side === r.phase).reduce((s, t) => s + Number(formatEther(BigInt(t.amount))), 0); add(x.user, 200 * Math.max(0, Number(formatEther(BigInt(x.amount))) - st)); } }
   }
   for (const a of answers.rows || []) if (a.status === "answered") add(a.asker, 20);
-  const ptb = [...pts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  // Our own contracts ask the swarm on behalf of markets and wagers; they are not players.
+  const ours = new Set(Object.values(CH).flatMap((c) => [c.market, c.wager, ...(c.registries || [])]).filter(Boolean).map((a) => a.toLowerCase()));
+  const ptb = [...pts.entries()].filter(([u]) => !ours.has(u)).sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (!P.get("id") && (act.length || lb.length)) {
     const g = document.createElement("div"); g.className = "grid2";
-    g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}&c=${x.r.chainId || 1}">#${x.r.id}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
+    g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}&c=${x.r.chainId || 1}">#${x.r.id}${(x.r.chainId || 1) === 4663 ? "" : " eth"}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
       <div class="card"><h4>Leaderboard <span class="lbt" style="float:right;font-weight:400;font-size:13px"><a href="#" data-l="pts">points</a> · <a href="#" data-l="pnl">profit</a></span></h4>
         <div class="lb" id="lb-pts">${ptb.map(([u, p], i) => `<div><span>${i + 1}. ${u.slice(0, 6)}…${u.slice(-4)}</span><span>${Math.round(p).toLocaleString()} pts</span></div>`).join("")}<p class="meta" style="margin:6px 0 0">Season 1 points from onchain activity: bets, wins, markets you open, answers you buy. Points only, no token promised.</p></div>
         <div class="lb" id="lb-pnl" hidden>${lb.map((x, i) => `<div title="volume ${x.vol.toFixed(2)} IMD"><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span style="color:${x.pnl >= 0 ? "#2e8b2b" : "#c2185b"}">${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD</span></div>`).join("")}</div></div>`;

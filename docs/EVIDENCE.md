@@ -1,4 +1,27 @@
-# Evidence: real mainnet asks through AskSwarmRegistry
+# Evidence
+
+## Robinhood Chain (current)
+
+[IMD launch #2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) deployed all three contracts in one transaction, [`0xf3de9749…`](https://robinhoodchain.blockscout.com/tx/0xf3de97499688c53dffa1970fbd38a65d85413b985f91724f6332be3b4f291566) (block 92654033), after the swarm's audit fixed two findings ([notes](../contracts/ADAPTATION-2223.md)).
+
+| contract | address | checked onchain |
+|---|---|---|
+| AskSwarmRegistry | [`0xf3a79f962ec1e75f0087af5491a69dee2a869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) | INTAKE Intake v2, IMD `0x5f7b…7127`, SIGNER `0x5598…2982`, price 0.5 IMD |
+| SwarmMarket | [`0x6c95a84944b05e7de5000caef80a7c487aa57cb8`](https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8) | REGISTRY = the registry above, MAX_TERM 365 days |
+| SwarmWager | [`0xd237dd7564edb7a026613ebb6da31da0292af96c`](https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c) | REGISTRY = the registry above, MAX_BODY_BYTES 16,384 |
+
+First activity, opened by the keeper on its own, each seeded 0.1 IMD per side by the house wallet:
+
+| market | question | open tx |
+|---|---|---|
+| #1 | Was the Coinbase ETH-USD daily close on 19 October 2026 (UTC) above 2,404 US dollars? | [`0xfb96eb2d…`](https://robinhoodchain.blockscout.com/tx/0xfb96eb2d80b693cb5586777d29f5e1f888ae4e978a558f18c90ad77495e9b798) |
+| #2 | Was the Coinbase BTC-USD daily close on 19 October 2026 (UTC) above 82,095 US dollars? | [`0x5a844c9e…`](https://robinhoodchain.blockscout.com/tx/0x5a844c9e7bd6d11a9dd8dbb1b0b3813d9f6887cd0e9ebcb51c3b6da561079f19) |
+
+Funds reached Robinhood Chain through the canonical bridges: ETH through the Arbitrum Delayed Inbox, IMD through its own LayerZero OFT (`scripts/bridge-eth.ts`, `scripts/bridge-imd.ts`).
+
+## Ethereum (first deployment)
+
+### Real mainnet asks through AskSwarmRegistry
 
 Registry #2088 `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea` (the current registry is #2099 `0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`; both show in the explorer), each row is one `ask(body)` paid in 0.5 IMD by the house wallet, answered by the swarm and verified onchain in `onOracleResult`.
 
@@ -14,7 +37,7 @@ Registry #2088 `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea` (the current registr
 | 8 | What is the atomic number of gold? Answer with the whole number only. | [0x63577a40…](https://etherscan.io/tx/0x63577a4093e3645cfbe0bc56fde926cf6e61cc3d733928bdc29a1b57eb3cb594) | [44eab9dc](https://api.imd.fun/oracle/requests/44eab9dc-aca0-42e4-b2bf-098c59cbd887/attestation) | attested | verified ✅ · `0xeac0c02b…` |
 | 9 | Did Bitcoin's genesis block get mined in January 2009? | [0x3b28c112…](https://etherscan.io/tx/0x3b28c112577dcfb827bc415f187ef07321d63cb43d3817ca5f86bc60a0eade98) | [a03ae889](https://api.imd.fun/oracle/requests/a03ae889-4a5d-4300-982a-e4bcf59ecf98/attestation) | attested | verified ✅ · `0x7636ca5b…` |
 
-## Contracts built on the registry, live on mainnet
+### Contracts built on the registry, live on mainnet
 
 | contract | id | question | outcome | txs |
 |---|---|---|---|---|

@@ -8,23 +8,23 @@ project, cannot be edited afterwards, prize paid to the contract's deployer addr
 
 | criterion | status |
 |---|---|
-| Launched through the IMD protocol during the build period | Done, twice: [launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa) then [launch #2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) from the monorepo (job [1d47e02c](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0)). Swarm audited, fixed five findings across the two rounds, tested, deployed. |
-| v4 hook or custom contract that really uses IMD | AskSwarmRegistry on Ethereum `0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`: pays Intake v2, receives `onOracleResult`, verifies the attestation onchain, stores it by questionHash. |
+| Launched through the IMD protocol during the build period | Done on **Robinhood Chain**: [launch #2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) audited, fixed two findings, tested and deployed all three contracts in one launch (job [dffc8efb](https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82)). Earlier on Ethereum: [launch #2088](https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa) then [launch #2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) from the monorepo (job [1d47e02c](https://explorer.imd.fun/jobs/1d47e02c-32b6-44ec-a8e1-ac913d9d2ad0)). Swarm audited, fixed five findings across the two rounds, tested, deployed. |
+| v4 hook or custom contract that really uses IMD | AskSwarmRegistry on Robinhood Chain `0xf3a79f962ec1e75f0087af5491a69dee2a869012` (Ethereum: `0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`): pays Intake v2, receives `onOracleResult`, verifies the attestation onchain, stores it by questionHash. |
 | Dedicated X account | Using [@Eval_Engine](https://x.com/Eval_Engine) (Johnson's call). To do: add AskSwarm + bot link to the bio, pin post 1, then posts 2 and 3. |
-| Submitted via IMD Radar | **TODO after launch is live**: form needs project X handle, contract address (mainnet registry), blurb below. |
+| Submitted via IMD Radar | **TODO**: form needs project X handle, contract address (use the Robinhood Chain registry `0xf3a79f962ec1e75f0087af5491a69dee2a869012`), blurb below. |
 
 Prize wallet: the launch's literal deployer is IMD's factory wallet, so name ours in the blurb like
 other entrants do. Johnson provides the address. Placeholder `0x…` below.
 
 ## Radar blurb (≤1000 chars incl. the full prize wallet address; replace the zero address)
 
-AskSwarm turns the IMD oracle into something people and contracts use. AskSwarmRegistry (IMD launches #2088, #2099) pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash: a public memory any contract can read. SwarmMarket (#2190) runs yes/no prediction markets on it: anyone stakes IMD, the verified answer pays the winners, 2% of the losing side goes to the market's creator and to free asks. SwarmWager (#2189) does 1v1 bets. A keeper resolves markets on time. Front ends: Telegram bot (/ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD; 6.7k past answers free; split-risk model from 7.8k IMD requests), an answers explorer, skill.md for agents. Answers flow back into the open Eval Engine dataset. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x0000000000000000000000000000000000000000
+AskSwarm turns the IMD oracle into something people and contracts use, live on Robinhood Chain. AskSwarmRegistry pays Intake v2 with itself as callback, verifies the swarm's EIP-712 attestation onchain and stores every answer by questionHash for any contract to read. SwarmMarket runs yes/no prediction markets on it: stake IMD, the verified answer pays the winners, 2% of the losing side goes to the creator and to free asks. SwarmWager does 1v1 bets. A keeper opens daily ETH and BTC rounds and settles them. All three were audited and deployed by the swarm in IMD launch #2223 (first on Ethereum, #2099/#2190/#2189). Telegram bot: /ask, /bet; pay 160 CHR via Chromia Pay or 0.5 IMD; 6.7k past answers free; split-risk model from 7.8k IMD requests. Answers flow back into the open Eval Engine dataset. Code github.com/ChromiaAgents/askswarm. Bot t.me/askswarm_bot. Prize wallet 0x0000000000000000000000000000000000000000
 
 ## X posts
 
 1. The IMD swarm now answers questions in Telegram. /ask anything checkable, a panel of agents votes, you get an EIP-712 signed answer verified in chat. Pay 160 CHR with Chromia Pay or 0.5 IMD from your wallet. 6.7k past answers are free. Built for the IMD hackathon. [attach docs/askswarm-demo.mp4]
 
-2. AskSwarmRegistry is live on Ethereum, launched through IMD and audited by the swarm. One call: ask(body) → 0.5 IMD → Intake v2 → onOracleResult verifies the attestation onchain and stores it by questionHash. Every answer anyone ever bought is readable by any contract. [etherscan link]
+2. AskSwarm is live on Robinhood Chain, launched through IMD and audited by the swarm. One call: ask(body) → 0.5 IMD → Intake v2 → onOracleResult verifies the attestation onchain and stores it by questionHash. Every answer anyone ever bought is readable by any contract. https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012
 
 3. Before you pay the swarm, know the odds. We trained a split-risk model on 7,804 IMD oracle requests (open dataset: hf.co/datasets/evalengine/imd-oracle-outcomes). AskSwarm shows the chance your panel disagrees, and why, before the Pay button.
 
@@ -36,7 +36,8 @@ Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 
 - Demo video: https://github.com/ChromiaAgents/askswarm/raw/main/docs/askswarm-demo.mp4
 
-- Registry https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd (launch https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) and the first one https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea (launch https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa).
+- Robinhood Chain (current), launch https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4: registry https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012, market https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8, wager https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c
+- Ethereum registry https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd (launch https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) and the first one https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea (launch https://explorer.imd.fun/launches/11fd096c-23fe-45a1-a957-20dd29747efa).
 - Explorer https://askswarm-nine.vercel.app/answers, agent docs https://askswarm-nine.vercel.app/skill.md.
 - At least 10 real mainnet asks through the registry with tx hashes (run `/examples` in the group with REGISTRY_ADDRESS set; each costs 0.5 IMD from the house wallet).
 - docs/EVIDENCE.md: 10 asks through #2088, all with tx and attestation links.
@@ -44,7 +45,7 @@ Tag @surfcoderepeat (Adam). Official IMD handle unverified, do not guess one.
 
 ## Before 21 Oct
 
-1. Launch live → set `REGISTRY_ADDRESS` in .env, rerun `scripts/vercel-env.sh`, run 10 asks.
+1. Done: Robinhood launch live, env set, site and bot on Robinhood Chain. Still to do: real asks and a real bet on Robinhood Chain for the evidence table.
 2. X account + 3 posts.
 3. Radar form.
 4. Revoke the live Chromia Pay agent token, rotate the Telegram bot token and Vercel token after the event.

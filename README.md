@@ -11,11 +11,18 @@ AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contr
 - **SwarmWager** does the same for one-on-one bets.
 - All three contracts were audited, adapted and deployed by the IMD swarm itself through IMD launches. Every answer flows back into the open [Eval Engine dataset](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes) that the split-risk model learns from.
 
-| contract | address | IMD launch |
+**Live on Robinhood Chain** (chain id 4663). All three contracts shipped in one IMD launch, [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4), whose audit added two fixes (below). The first deployment on Ethereum stays live and readable; the site, bot and keeper read both chains and put everything new on Robinhood Chain.
+
+| contract | Robinhood Chain (current) | Ethereum (first) |
 |---|---|---|
-| AskSwarmRegistry | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) | [#2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) |
-| SwarmMarket | [`0x4964d5f0…8afa55`](https://etherscan.io/address/0x4964d5f08c71e71d490a9b8a30ed796fc38afa55) | [#2190](https://explorer.imd.fun/launches/01cfb128-811e-4584-8035-85249f0a4884) |
-| SwarmWager | [`0xc0b13031…99bbe6`](https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6) | [#2189](https://explorer.imd.fun/launches/9781dc7e-23dc-4f1c-93f8-4766c016cac7) |
+| AskSwarmRegistry | [`0xf3a79f96…869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0x53e1e2f3…b111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) · [#2099](https://explorer.imd.fun/launches/503c2f1a-6479-4fbb-856a-4d57361698fb) |
+| SwarmMarket | [`0x6c95a849…7cb8`](https://robinhoodchain.blockscout.com/address/0x6c95a84944b05e7de5000caef80a7c487aa57cb8) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0x4964d5f0…8afa55`](https://etherscan.io/address/0x4964d5f08c71e71d490a9b8a30ed796fc38afa55) · [#2190](https://explorer.imd.fun/launches/01cfb128-811e-4584-8035-85249f0a4884) |
+| SwarmWager | [`0xd237dd75…f96c`](https://robinhoodchain.blockscout.com/address/0xd237dd7564edb7a026613ebb6da31da0292af96c) · [#2223](https://explorer.imd.fun/launches/ffd8f76a-484d-4366-b1d6-a3100b9766e4) | [`0xc0b13031…99bbe6`](https://etherscan.io/address/0xc0b130319ad1e9bb059bc8aab147ca064399bbe6) · [#2189](https://explorer.imd.fun/launches/9781dc7e-23dc-4f1c-93f8-4766c016cac7) |
+
+What launch #2223 changed (notes: [contracts/ADAPTATION-2223.md](contracts/ADAPTATION-2223.md)):
+
+- `SwarmMarket.open` caps `resolveAfter` at 365 days (`MAX_TERM`, as in SwarmWager). Without it a creator could set a date no chain reaches and trap every stake.
+- Robinhood Chain's IMD is an owner-controlled LayerZero OFT that can block an address. A payment to a third party (creator, treasury, the other side of a wager) is now pushed if the token takes it, else credited to `owed(address)` for that address to `withdraw()`, so one blocked address cannot freeze anyone else's funds.
 
 Built by Chromia × EVAL Engine for the Identity MD hackathon, October 2026. Bot: [t.me/askswarm_bot](https://t.me/askswarm_bot).
 
@@ -29,7 +36,7 @@ sequenceDiagram
     actor U as User (Telegram)
     participant B as AskSwarm bot<br/>(Vercel functions)
     participant P as Chromia Pay
-    participant R as AskSwarmRegistry<br/>(Ethereum, launched through IMD)
+    participant R as AskSwarmRegistry<br/>(Robinhood Chain, launched through IMD)
     participant I as IMD Intake v2
     participant S as IMD swarm<br/>(api.imd.fun)
 
@@ -54,7 +61,7 @@ sequenceDiagram
     I->>R: onOracleResult: verify EIP-712 onchain, store by questionHash
     B->>S: GET /oracle/requests/:id/attestation
     B->>B: verifyTypedData, pin signer
-    B-->>U: ✅ CHF · 11/15 agreed · verified  [attestation] [swarm job] [etherscan]
+    B-->>U: ✅ CHF · 11/15 agreed · verified  [attestation] [swarm job] [explorer]
 ```
 
 ### Architecture
@@ -70,7 +77,7 @@ flowchart LR
         L[bot + APIs<br/>stateless]
     end
     CP[Chromia Pay<br/>CHR checkout]
-    subgraph ETH[Ethereum mainnet]
+    subgraph ETH[Robinhood Chain · Ethereum]
         R["AskSwarmRegistry<br/>verify EIP-712, store by questionHash"]
         M["SwarmMarket<br/>yes/no pools, 2% fee"]
         W["SwarmWager<br/>1v1 bets"]
@@ -164,7 +171,10 @@ Vercel project `askswarm`, team ChromaWay. Env:
 | `TELEGRAM_WEBHOOK_SECRET` | random, also passed to `setWebhook` |
 | `EVM_PRIVATE_KEY` | hot wallet, never the IMD NFT / node key |
 | `SEPOLIA_RPC_URL`, `ETH_RPC_URL` | any RPC |
-| `ASK_CHAIN_ID` | `11155111` free demo, `1` real IMD |
+| `ASK_CHAIN_ID` | chain the bot asks on: `4663` Robinhood Chain, `1` Ethereum, `11155111` free demo |
+| `ACTIVE_CHAIN_ID` | chain for new markets, daily rounds and pages (`4663`) |
+| `RH_REGISTRY_ADDRESS`, `RH_MARKET_ADDRESS`, `RH_WAGER_ADDRESS`, `RH_FROM_BLOCK` | Robinhood Chain contracts; `REGISTRY_ADDRESS(ES)`, `MARKET_ADDRESS`, `WAGER_ADDRESS` are the Ethereum ones |
+| `RH_RPC_URL`, `ETH_RPC_URL` | optional private RPCs; public endpoints are the default |
 | `CPAY_SECRET_KEY`, `CPAY_WEBHOOK_SECRET`, `CPAY_PRICE_CHR` | optional, enables the Pay button |
 
 ```sh
@@ -237,11 +247,12 @@ notes: [contracts/ADAPTATION.md](contracts/ADAPTATION.md), [contracts/ADAPTATION
 
 | chain | AskSwarmRegistry |
 |---|---|
-| Ethereum mainnet, current (launch #2099) | [`0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) |
+| Robinhood Chain, current (launch #2223) | [`0xf3a79f962ec1e75f0087af5491a69dee2a869012`](https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012) |
+| Ethereum mainnet (launch #2099) | [`0x53e1e2f33f05086086adf618ca92c3cb0ab111cd`](https://etherscan.io/address/0x53e1e2f33f05086086adf618ca92c3cb0ab111cd) |
 | Ethereum mainnet, first (launch #2088), 10 answers on record | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
 | Sepolia (self-deployed, pre-audit build) | `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900` |
 
-The explorer at [/answers](https://askswarm-nine.vercel.app/answers) reads both mainnet registries.
+The explorer at [/answers](https://askswarm-nine.vercel.app/answers) reads every registry on both chains, with a chain badge on each answer.
 
 ### Built on the registry: SwarmWager
 
