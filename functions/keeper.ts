@@ -9,7 +9,7 @@ import * as imd from "../packages/imd/src/index";
 import { announceOpened, announceSettled } from "../lib/announce";
 import { getLogsChunked } from "../lib/logs";
 import { privateKeyToAccount } from "viem/accounts";
-import { chainList, ACTIVE, type ChainCfg } from "../lib/chains";
+import { chainList, ACTIVE, type ChainCfg, transportFor } from "../lib/chains";
 
 export const maxDuration = 300;
 const marketAbi = parseAbi([
@@ -51,7 +51,7 @@ export async function runKeeper(): Promise<Act[]> {
 }
 
 async function runChain(c: ChainCfg): Promise<Act[]> {
-  const transport = http(c.rpc);
+  const transport = transportFor(c);
   const pub = createPublicClient({ chain: c.viem, transport });
   const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as Hex);
   const wallet = createWalletClient({ account, chain: c.viem, transport });

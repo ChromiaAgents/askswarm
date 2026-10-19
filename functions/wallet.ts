@@ -8,7 +8,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createPublicClient, createWalletClient, http, erc20Abi, parseEther, formatEther, isAddress, getAddress, keccak256, toHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ACTIVE } from "../lib/chains";
+import { ACTIVE, transportFor } from "../lib/chains";
 
 export const maxDuration = 60;
 const GAS = parseEther(process.env.GAS_DRIP_ETH ?? "0.00005");
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   seen.set(k, Date.now());
 
   try {
-    const transport = http(c.rpc);
+    const transport = transportFor(c);
     const pub = createPublicClient({ chain: c.viem, transport });
     const house = privateKeyToAccount(pk);
     const w = createWalletClient({ account: house, chain: c.viem, transport });

@@ -6,7 +6,7 @@ import {
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { IMD_API, ImdError, type OracleRequestBody } from "./index";
-import { CHAINS as NET, robinhood } from "../../../lib/chains";
+import { CHAINS as NET, robinhood, transportFor } from "../../../lib/chains";
 
 export const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82" as const; // Intakev2, same on every chain
 export const PRICE = 500000000000000000n; // 0.5 IMD
@@ -35,9 +35,11 @@ export const registryAbi = parseAbi([
   "function answerOf(bytes32 questionHash) view returns (bytes32 requestId, (bytes32 questionHash, bytes answer, bytes32 answerHash, uint8 answerType, uint16 panelSize, uint16 quorum, uint16 agreed, uint64 issuedAt, uint64 expiresAt, bool verified) a)",
 ]);
 
+const rpc = (chainId: IntakeChainId) => (NET[chainId] ? transportFor(NET[chainId]) : http(process.env[CHAINS[chainId].rpcEnv]));
+
 export function clients(chainId: IntakeChainId, account: PrivateKeyAccount) {
   const c = CHAINS[chainId];
-  const transport = http(process.env[c.rpcEnv]);
+  const transport = rpc(chainId);
   return {
     cfg: c,
     pub: createPublicClient({ chain: c.chain, transport }),
@@ -122,7 +124,7 @@ export function oracleRequestIdFrom(r: { entries: IntakeEntry[] } | null): strin
 export async function registryAnswer(chainId: IntakeChainId, questionHash: Hex) {
   const reg = registryFor(chainId); if (!reg) return null;
   const c = CHAINS[chainId];
-  const pub = createPublicClient({ chain: c.chain, transport: http(process.env[c.rpcEnv]) });
+  const pub = createPublicClient({ chain: c.chain, transport: rpc(chainId) });
   const [requestId, a] = await pub.readContract({ address: reg, abi: registryAbi, functionName: "answerOf", args: [questionHash] });
   return a.verified ? { requestId, ...a } : null;
 }
@@ -131,7 +133,7 @@ export async function registryAnswer(chainId: IntakeChainId, questionHash: Hex) 
 export async function registryRecord(chainId: IntakeChainId, intakeRequestId: Hex) {
   const reg = registryFor(chainId); if (!reg) return null;
   const c = CHAINS[chainId];
-  const pub = createPublicClient({ chain: c.chain, transport: http(process.env[c.rpcEnv]) });
+  const pub = createPublicClient({ chain: c.chain, transport: rpc(chainId) });
   const [k, a] = await pub.readContract({ address: reg, abi: registryAbi, functionName: "get", args: [intakeRequestId] });
   const status = (["none", "pending", "answered", "refused", "no result", "unverified"] as const)[k.status] ?? "?";
   return { status, verified: a.verified, agreed: a.agreed, panelSize: a.panelSize };

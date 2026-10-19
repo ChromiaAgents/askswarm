@@ -1,9 +1,10 @@
 // One place for everything chain-specific. AskSwarm runs on Ethereum mainnet and Robinhood Chain;
 // ACTIVE_CHAIN_ID picks where new activity goes (bot asks, daily rounds, new markets), and every read
 // path covers both so history on either chain stays visible.
-import { defineChain, type Chain, type Hex } from "viem";
+import { defineChain, fallback, http, type Chain, type Hex, type Transport } from "viem";
 import { mainnet } from "viem/chains";
 
+const RH_PUBLIC = "https://rpc.mainnet.chain.robinhood.com", ETH_PUBLIC = "https://ethereum-rpc.publicnode.com";
 export const robinhood = defineChain({
   id: 4663,
   name: "Robinhood Chain",
@@ -17,7 +18,8 @@ export type ChainCfg = {
   name: string;
   short: string;
   viem: Chain;
-  rpc: string;
+  rpc: string; // server-side, may carry a provider key (RH_RPC_URL / ETH_RPC_URL): never sent to browsers
+  rpcPublic: string; // keyless, for browsers and as the server's fallback
   logsRpcs: string[];
   logStep: bigint;
   explorer: string;
@@ -34,7 +36,7 @@ const env = process.env;
 export const CHAINS: Record<number, ChainCfg> = {
   1: {
     id: 1, name: "Ethereum", short: "ETH", viem: mainnet,
-    rpc: env.ETH_RPC_URL ?? "https://ethereum-rpc.publicnode.com",
+    rpc: env.ETH_RPC_URL ?? ETH_PUBLIC, rpcPublic: ETH_PUBLIC,
     logsRpcs: list(env.LOGS_RPC_URLS ?? "https://gateway.tenderly.co/public/mainnet,https://rpc.flashbots.net,https://rpc.mevblocker.io"),
     logStep: 5000n, explorer: "https://etherscan.io",
     imd: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
@@ -45,8 +47,9 @@ export const CHAINS: Record<number, ChainCfg> = {
   },
   4663: {
     id: 4663, name: "Robinhood Chain", short: "RH", viem: robinhood,
-    rpc: env.RH_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com",
-    logsRpcs: list(env.RH_LOGS_RPC_URLS ?? env.RH_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com"),
+    rpc: env.RH_RPC_URL ?? RH_PUBLIC, rpcPublic: RH_PUBLIC,
+    // Scans stay on the public RPC: keyed free tiers cap eth_getLogs ranges far below our chunks.
+    logsRpcs: list(env.RH_LOGS_RPC_URLS ?? RH_PUBLIC),
     // The RPC allows 2M blocks for one event type but only 100k when a query names several (OR topics).
     logStep: 100_000n, explorer: "https://robinhoodchain.blockscout.com",
     imd: "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
@@ -61,6 +64,12 @@ export const CHAINS: Record<number, ChainCfg> = {
 const want = CHAINS[Number(env.ACTIVE_CHAIN_ID ?? 1)];
 export const ACTIVE: ChainCfg = want?.registries.length ? want : CHAINS[1];
 export const chainList = () => Object.values(CHAINS);
+/** Server transport: the configured RPC first, the public one if it fails; 429s and 5xx are retried with backoff.
+ *  The public Robinhood RPC allows about 20 requests a second per IP. */
+export const transportFor = (c: ChainCfg): Transport => {
+  const t = (u: string) => http(u, { retryCount: 4, retryDelay: 250, timeout: 20_000 });
+  return c.rpc === c.rpcPublic ? t(c.rpc) : fallback([t(c.rpc), t(c.rpcPublic)]);
+};
 export const txUrl = (chainId: number, tx: string) => `${CHAINS[chainId]?.explorer ?? "https://etherscan.io"}/tx/${tx}`;
 export const addrUrl = (chainId: number, a: string) => `${CHAINS[chainId]?.explorer ?? "https://etherscan.io"}/address/${a}`;
 /** IMD launch that audited and deployed each contract, as its explorer job page. */
@@ -70,4 +79,4 @@ export const LAUNCHES: Record<number, { registry: { n: number; url: string }; ma
   4663: { registry: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223), market: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223), wager: J("dffc8efb-80a1-4774-9720-440834a61b82", 2223) },
 };
 /** Public, browser-safe summary for pages: addresses, explorers, RPCs, launch links. */
-export const publicChains = () => chainList().map((c) => ({ id: c.id, name: c.name, short: c.short, rpc: c.id === 1 ? "https://ethereum-rpc.publicnode.com" : c.rpc, explorer: c.explorer, explorerName: c.id === 1 ? "Etherscan" : "Blockscout", imd: c.imd, registry: c.registries[0] ?? null, registries: c.registries, market: c.market ?? null, wager: c.wager ?? null, launches: LAUNCHES[c.id] }));
+export const publicChains = () => chainList().map((c) => ({ id: c.id, name: c.name, short: c.short, rpc: c.rpcPublic, explorer: c.explorer, explorerName: c.id === 1 ? "Etherscan" : "Blockscout", imd: c.imd, registry: c.registries[0] ?? null, registries: c.registries, market: c.market ?? null, wager: c.wager ?? null, launches: LAUNCHES[c.id] }));

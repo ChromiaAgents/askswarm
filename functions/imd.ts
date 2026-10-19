@@ -3,7 +3,7 @@
 //   POST /api/imd {c,m,q,s,tx}   → verify the tx on chain, then mark the card as asked
 // `s` is an HMAC the bot minted over (chat, message, question); nobody else can point a card at a tx.
 import { createPublicClient, http, decodeFunctionData, hexToString, type Hex } from "viem";
-import { CHAINS } from "../lib/chains";
+import { CHAINS, transportFor } from "../lib/chains";
 import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { verifySig, markAsked, ASK_CHAIN } from "../lib/bot";
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
   const chainId = Number(p.chainId ?? (ASK_CHAIN === 11155111 ? 1 : ASK_CHAIN));
   const c = CHAINS[chainId]; if (!c) return json({ error: "bad_chain" }, 400);
-  const pub = createPublicClient({ chain: c.viem, transport: http(c.rpc) });
+  const pub = createPublicClient({ chain: c.viem, transport: transportFor(c) });
   const REG = intake.registryFor(chainId);
   const [t, r] = await Promise.all([pub.getTransaction({ hash: tx }), pub.getTransactionReceipt({ hash: tx })]);
   const to = t.to?.toLowerCase();
