@@ -5,9 +5,9 @@
 //     Keystore) inside the Mini App, else Telegram CloudStorage, else this browser. One-tap bets, no
 //     app switching. The house sends a little gas (and a small starter while it lasts) through
 //     /api/wallet, which only answers Telegram-signed requests. For small amounts: it is a hot key.
-//  3. WalletConnect: QR on desktop, the wallet app on a phone. Inside Telegram the wallet is opened
-//     with Telegram.WebApp.openLink and an https universal link, since Telegram blocks the custom
-//     schemes WalletConnect's own picker uses. Chain is set on the session, not asked of the wallet
+//  3. WalletConnect, the same modal and wallets as Chromia Pay's checkout: QR on desktop, the wallet
+//     app on a phone. Inside Telegram, https wallet links go through Telegram.WebApp.openLink, since
+//     the webview drops window.open. Chain is set on the session, not asked of the wallet
 //     (MetaMask Mobile ignores wallet_switchEthereumChain over WalletConnect).
 import { createWalletClient, createPublicClient, custom, http, erc20Abi, formatEther, parseEther, isAddress } from "https://esm.sh/viem@2.57.7";
 import { privateKeyToAccount, generatePrivateKey } from "https://esm.sh/viem@2.57.7/accounts";
@@ -15,7 +15,7 @@ import { viemChain, switchTo, addr as addrLink } from "/chain.js";
 
 // Chromia's Reown project (shared with Chromia Pay). Not a secret; swap for AskSwarm's own when registered.
 const WC_PROJECT_ID = "70e9c33528a1e905ab36488c8281098f";
-const KEY = "askswarm_wallet_v1", CHOICE = "askswarm_wallet_choice", WC_LINK = "askswarm_wc_link";
+const KEY = "askswarm_wallet_v1", CHOICE = "askswarm_wallet_choice";
 const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
 // Only the storage this Telegram version supports; otherwise the SDK throws "not supported".
 const secure = tg?.isVersionAtLeast?.("9.0") ? tg.SecureStorage : null, cloud = tg?.isVersionAtLeast?.("6.9") ? tg.CloudStorage : null;
@@ -25,7 +25,8 @@ const css = `.sw-sheet{position:fixed;inset:auto 0 0 0;z-index:80;background:var
 .sw-sheet h3{margin:0 0 4px;font-size:19px}.sw-sheet p{margin:4px 0 12px;font-size:14px;opacity:.8;line-height:1.45}
 .sw-sheet .opt{display:block;width:100%;text-align:left;margin:0 0 10px;padding:13px 14px;border:2px solid var(--ink,#1F1A23);border-radius:16px;background:var(--bg,#1F1A23);color:inherit;font:inherit;cursor:pointer}
 .sw-sheet .opt b{display:block;font-size:16px}.sw-sheet .opt span{font-size:13px;opacity:.75}
-.sw-sheet .opt.rec{background:#CCFF00;color:#1F1A23}.sw-sheet .row{display:flex;gap:8px;flex-wrap:wrap}
+.sw-sheet .opt.rec{background:#CCFF00;color:#1F1A23}.sw-sheet .opt img.lg{float:right;width:34px;height:34px;border-radius:10px;margin-left:10px}
+.sw-sheet .logos{display:flex;align-items:center;gap:6px;margin-top:9px;min-height:28px}.sw-sheet .logos img{width:28px;height:28px;border-radius:8px}.sw-sheet .logos em{font-size:12px;opacity:.7;font-style:normal}.sw-sheet .row{display:flex;gap:8px;flex-wrap:wrap}
 .sw-sheet .row button,.sw-sheet .x{padding:10px 14px;border-radius:999px;border:2px solid var(--ink,#1F1A23);background:#CC91F0;color:#1F1A23;font:700 14px inherit;cursor:pointer}
 .sw-sheet .x{background:transparent;color:inherit;margin-top:6px}.sw-sheet code{word-break:break-all;font-size:13px}
 .sw-sheet input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:12px;border:2px solid var(--ink,#1F1A23);font:inherit;margin:6px 0 10px;background:var(--bg,#fff);color:inherit}
@@ -110,34 +111,43 @@ export async function ensureGas(C, account, log = () => {}) {
   return r;
 }
 
-// Universal links that take a wc: URI at /wc?uri= (the format WalletConnect's own registry lists).
-const WC_WALLETS = [["MetaMask", "https://metamask.app.link"], ["Trust Wallet", "https://link.trustwallet.com"], ["Rainbow", "https://rnbwapp.com"]];
+// The same five wallets Chromia Pay's checkout recommends (WalletConnect explorer ids). They lead the
+// official WalletConnect modal, which shows their icons, a QR code on desktop and the wallet app on a phone.
+const WC_IDS = [
+  "c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96", // MetaMask
+  "4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0", // Trust Wallet
+  "1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369", // Rainbow
+  "d0ca99ff52b99abc48743dad0f7fc891e041be73574f7fac4afe5d4bb83845c8", // Coinbase Wallet
+  "971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709", // OKX Wallet
+];
+let logos = null;
+const walletLogos = () => (logos ||= fetch(`https://explorer-api.walletconnect.com/v3/wallets?projectId=${WC_PROJECT_ID}&ids=${WC_IDS.join(",")}`, { signal: AbortSignal.timeout(4000) })
+  .then((r) => r.json()).then((d) => WC_IDS.map((id) => d.listings?.[id]).filter(Boolean).map((l) => ({ name: l.name, img: l.image_url?.sm }))).catch(() => []));
+
+// Telegram's webview drops window.open for wallet links; while the modal is up, send https links
+// through Telegram.WebApp.openLink, which opens them in the wallet app.
+async function viaTelegram(fn) {
+  if (!tg) return fn();
+  const open = window.open;
+  window.open = (url, target, features) => { const u = String(url ?? ""); if (u.startsWith("https://")) { tg.openLink(u); return null; } return open.call(window, url, target, features); };
+  try { return await fn(); } finally { window.open = open; }
+}
+
 async function walletConnect(C) {
   const { EthereumProvider } = await import("https://esm.sh/@walletconnect/ethereum-provider@2.23.10");
   const provider = await EthereumProvider.init({
-    projectId: WC_PROJECT_ID, optionalChains: [C.id, ...(C.id === 1 ? [] : [1])], showQrModal: !tg,
+    projectId: WC_PROJECT_ID, optionalChains: [C.id, ...(C.id === 1 ? [] : [1])], showQrModal: true,
+    qrModalOptions: { explorerRecommendedWalletIds: WC_IDS },
     rpcMap: { [C.id]: C.rpc, 1: "https://ethereum-rpc.publicnode.com" },
     metadata: { name: "AskSwarm", description: "Bet IMD on yes/no questions the IMD swarm settles", url: location.origin, icons: [location.origin + "/logo.svg"] },
   });
-  let walletLink = recall(WC_LINK);
-  if (provider.session) { /* restored from an earlier connect: no new pairing */ }
-  else if (tg) {
-    // Pairing URI first, then a tap opens the wallet through Telegram (a gesture is required).
-    const connecting = provider.connect();
-    const uri = await new Promise((res, rej) => { provider.on("display_uri", res); connecting.catch(rej); });
-    const el = sheet(`<h3>Open your wallet</h3><p>Approve the connection in your wallet app, then come back to Telegram. Your wallet needs ${esc(C.name)} support.</p>
-      <div class="row">${WC_WALLETS.map(([n], i) => `<button data-i="${i}">${n}</button>`).join("")}<button data-copy>Copy link</button></div><button class="x">Cancel</button>`);
-    el.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => { walletLink = WC_WALLETS[b.dataset.i][1]; remember(WC_LINK, walletLink); tg.openLink(walletLink + "/wc?uri=" + encodeURIComponent(uri)); }));
-    el.querySelector("[data-copy]").onclick = (e) => { navigator.clipboard?.writeText(uri); e.target.textContent = "Copied"; };
-    const cancelled = new Promise((_, rej) => { el.querySelector(".x").onclick = () => rej(new Error("Cancelled.")); });
-    try { await Promise.race([connecting, cancelled]); } catch (e) { connecting.catch(() => {}); throw e; } finally { closeSheet(); }
-  } else {
-    await provider.connect();
-  }
+  if (!provider.session) await viaTelegram(() => provider.connect()); // restored sessions skip pairing
   const approved = (provider.session?.namespaces?.eip155?.chains || []).map((c) => Number(c.split(":")[1]));
   if (!approved.includes(C.id)) { await provider.disconnect().catch(() => {}); throw new Error(`Your wallet did not approve ${C.name}. Use the AskSwarm wallet, or a wallet with ${C.name} support.`); }
   provider.chainId = C.id;
   const account = provider.accounts[0];
+  // The modal records the wallet app picked on a phone; reuse it for the way back to sign.
+  let walletLink = null; try { walletLink = JSON.parse(localStorage.getItem("WALLETCONNECT_DEEPLINK_CHOICE") || "null")?.href || null; } catch {}
   // In Telegram, every signing request needs the user to switch to the wallet app: offer the tap.
   const raw = provider.request.bind(provider);
   provider.request = async (args) => {
@@ -149,21 +159,16 @@ async function walletConnect(C) {
   return { kind: "walletconnect", w, account, provider, walletLink };
 }
 
-function deepLinks() {
-  const here = location.href, host = location.host + location.pathname + location.search;
-  return [["MetaMask", `https://metamask.app.link/dapp/${host}`], ["Trust Wallet", `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(here)}`], ["Coinbase Wallet", `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(here)}`]];
-}
-
-/** Ask which wallet to use. Resolves "askswarm" | "walletconnect"; deep links leave the page. */
+/** Ask which wallet to use. Resolves "askswarm" | "walletconnect". */
 function pick(C) {
+  const icons = walletLogos();
   return new Promise((res, rej) => {
     const el = sheet(`<h3>Choose a wallet</h3><p>Bets are in IMD on ${esc(C.name)}.</p>
-      <button class="opt rec" data-k="askswarm"><b>AskSwarm wallet${tg ? " · recommended" : ""}</b><span>${tg ? "Kept in Telegram on this phone. Bet in one tap; deposit IMD to play. We cover gas." : "Kept in this browser. Bet in one tap; deposit IMD and a little ETH to play."}</span></button>
-      <button class="opt" data-k="walletconnect"><b>Connect your wallet</b><span>MetaMask, Trust, Rainbow and more via WalletConnect${tg ? "" : ": QR code or wallet app"}.</span></button>
-      <div class="row">${deepLinks().map(([n, u]) => `<button data-u="${esc(u)}">Open in ${n}</button>`).join("")}</div>
+      <button class="opt rec" data-k="askswarm"><img class="lg" src="/logo.svg" alt=""><b>AskSwarm wallet${tg ? " · recommended" : ""}</b><span>${tg ? "Kept in Telegram on this device. Bet in one tap; deposit IMD to play. We cover gas." : "Kept in this browser. Bet in one tap; deposit IMD and a little ETH to play."}</span></button>
+      <button class="opt" data-k="walletconnect"><b>Connect your wallet</b><span>WalletConnect: scan the QR code, or open your wallet app.</span><div class="logos"></div></button>
       <button class="x">Cancel</button>`);
+    icons.then((ls) => { const d = el.querySelector(".logos"); if (d && ls.length) d.innerHTML = ls.map((l) => `<img src="${esc(l.img)}" alt="${esc(l.name)}" title="${esc(l.name)}">`).join("") + `<em>+ more</em>`; });
     el.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => { closeSheet(); res(b.dataset.k); }));
-    el.querySelectorAll("[data-u]").forEach((b) => (b.onclick = () => (tg ? tg.openLink(b.dataset.u) : (location.href = b.dataset.u))));
     el.querySelector(".x").onclick = () => { closeSheet(); rej(new Error("No wallet chosen.")); };
   });
 }
@@ -192,7 +197,7 @@ async function openWallet(C, { log = () => {} } = {}) {
 }
 
 /** Ask again next time (and drop a WalletConnect session); the AskSwarm wallet key stays. */
-export async function switchWallet() { remember(CHOICE, "pick"); remember(WC_LINK, null); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
+export async function switchWallet() { remember(CHOICE, "pick"); await session?.provider?.disconnect?.().catch(() => {}); session = null; }
 
 // ---- AskSwarm wallet bar: balance, deposit, withdraw, export ----
 export async function walletBar(el, C) {
