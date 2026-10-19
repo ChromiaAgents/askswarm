@@ -28,16 +28,25 @@ export async function GET() {
     const logs = await pub.getLogs({ address: MARKET, events: abi, fromBlock: FROM_BLOCK, toBlock: await pub.getBlockNumber() });
     const m = new Map<string, any>();
     let fees = 0n, volume = 0n;
+    // Timestamps for the chart: one getBlock per distinct block (few per market).
+    const blocks = [...new Set((logs as any[]).map((l) => l.blockNumber as bigint))];
+    const ts = new Map<bigint, number>();
+    await Promise.all(blocks.map(async (b) => ts.set(b, Number((await pub.getBlock({ blockNumber: b })).timestamp))));
     for (const l of logs as any[]) {
-      const a = l.args, id = String(a.id);
+      const a = l.args, id = String(a.id), t = ts.get(l.blockNumber) ?? 0;
       if (l.eventName === "Opened") {
         let body: any = {}; try { body = JSON.parse(hexToString(a.body)); } catch {}
-        m.set(id, { id, creator: a.creator, closeAt: Number(a.closeAt), resolveAfter: Number(a.resolveAfter), question: body.question ?? "", body, phase: "open", yesPool: 0n, noPool: 0n, stakers: new Set<string>(), openTx: l.transactionHash });
+        m.set(id, { id, creator: a.creator, closeAt: Number(a.closeAt), resolveAfter: Number(a.resolveAfter), question: body.question ?? "", body, phase: "open", yesPool: 0n, noPool: 0n, stakers: new Set<string>(), openTx: l.transactionHash, openedAt: t, trades: [] as any[], history: [{ t, yesBps: 5000 }], claims: [] as any[] });
       }
       const r = m.get(id); if (!r) continue;
-      if (l.eventName === "Staked") { a.yes ? (r.yesPool += a.amount) : (r.noPool += a.amount); r.stakers.add(a.user.toLowerCase()); volume += a.amount; }
-      if (l.eventName === "Resolving") Object.assign(r, { phase: "asked", requestId: a.requestId });
-      if (l.eventName === "Settled") { Object.assign(r, { phase: PHASES[a.phase], fee: a.fee, settleTx: l.transactionHash }); fees += a.fee; }
+      if (l.eventName === "Staked") {
+        a.yes ? (r.yesPool += a.amount) : (r.noPool += a.amount); r.stakers.add(a.user.toLowerCase()); volume += a.amount;
+        r.trades.push({ t, user: a.user, side: a.yes ? "yes" : "no", amount: a.amount, tx: l.transactionHash });
+        r.history.push({ t, yesBps: Number((r.yesPool * 10000n) / (r.yesPool + r.noPool)) });
+      }
+      if (l.eventName === "Resolving") Object.assign(r, { phase: "asked", requestId: a.requestId, resolveTx: l.transactionHash, askedAt: t });
+      if (l.eventName === "Settled") { Object.assign(r, { phase: PHASES[a.phase], fee: a.fee, settleTx: l.transactionHash, settledAt: t, voidReason: a.phase === 5 ? a.reason : undefined }); fees += a.fee; }
+      if (l.eventName === "Claimed") r.claims.push({ t, user: a.user, amount: a.amount, tx: l.transactionHash });
     }
     const rows = [...m.values()].sort((x, y) => Number(y.id) - Number(x.id)).map((r) => {
       const t = r.yesPool + r.noPool;
