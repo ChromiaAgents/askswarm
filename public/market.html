@@ -40,6 +40,36 @@
   .log{font:13px/1.6 "NB Mono",monospace;white-space:pre-wrap;margin-top:10px}
   .err{color:#c2185b}.ok{color:#2e8b2b}
   details summary{cursor:pointer;font-weight:700}
+  .mk{background:var(--card);border:2px solid var(--ink);border-radius:22px;padding:18px;box-shadow:5px 5px 0 var(--ink)}
+  .mmeta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+  .mt{font:700 24px/1.25 "NB International",Helvetica,Arial,sans-serif;margin:10px 0 14px}
+  .sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .side{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:14px 16px;border-radius:18px;text-align:left;box-shadow:none;border:3px solid transparent;opacity:.55}
+  .side.y{background:var(--green)}.side.n{background:var(--pink)}
+  .side.on{opacity:1;border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+  .side small{font-size:14px;font-weight:700;letter-spacing:.06em}
+  .side b{font:900 34px/1 "Battlefin",Georgia,serif}
+  .side span{font-size:14px}
+  .chips{display:flex;gap:8px;margin:14px 0 10px;align-items:center}
+  .chips button{flex:1;box-shadow:none;padding:10px 0;background:var(--card);color:var(--ink);font-size:15px}
+  .chips button.on{background:var(--ink);color:var(--bg)}
+  .chips input{flex:1.3;min-width:0;text-align:center;font-size:16px;padding:10px 6px}
+  .cta{width:100%;padding:16px;font-size:17px;border-radius:16px;margin-top:4px}
+  .cta.y{background:var(--green)}.cta.n{background:var(--pink)}.cta.alt{background:var(--yellow)}
+  .res{border:2px solid #1F1A23;border-radius:16px;padding:14px 16px;margin:0 0 12px;color:#1F1A23;display:flex;flex-direction:column;gap:2px}
+  .res b{font-size:19px}.res span{font-size:14px}
+  .res.yes{background:var(--green)}.res.no{background:var(--pink)}.res.void{background:#ddd}.res.wait{background:var(--yellow)}
+  .final{display:flex;height:44px;border:2px solid var(--ink);border-radius:999px;overflow:hidden;font-weight:700}
+  .final .y{background:var(--green);color:#1F1A23;display:flex;align-items:center;padding-left:14px}
+  .final .n{background:var(--pink);color:#1F1A23;flex:1;display:flex;align-items:center;justify-content:flex-end;padding-right:14px}
+  .more{margin-top:12px;border-top:2px solid color-mix(in srgb,var(--ink) 12%,transparent);padding-top:10px}
+  .more summary{font-size:16px;padding:4px 0}
+  .trow{display:grid;grid-template-columns:1.3fr .6fr 1fr .8fr;gap:6px;font-size:14px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--ink) 10%,transparent)}
+  .trow .ty{color:#2e8b2b}.trow .tn{color:#c2185b}.trow a{text-align:right}
+  .rules p{font-size:15px;line-height:1.5;margin:8px 0}
+  .in-tg .sw-nav{display:none}
+  .in-tg body{padding-top:12px}
+  @media (max-width:560px){.chart svg{height:180px}.cbox .chead .v{font-size:22px}.cd{font-size:16px}.mt{font-size:21px}}
   .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin:0 0 14px}
   @media (max-width:760px){.grid2{grid-template-columns:1fr}}
   .feed div,.lb div{display:flex;justify-content:space-between;gap:10px;font:13px/1.9 "NB Mono",monospace;border-bottom:1px solid color-mix(in srgb,var(--ink) 10%,transparent)}
@@ -293,53 +323,61 @@
     const [m, bodyHex] = await pub.readContract({ address: M, abi: mAbi, functionName: "get", args: [BigInt(id)] });
     let body = {}; try { body = JSON.parse(hexToString(bodyHex)); } catch {}
     const ph = PH[m.phase], now = Date.now() / 1000;
+    const row = (data.rows || []).find((r) => String(r.id) === String(id)) || { history: [], trades: [], claims: [] };
+    const T = title({ question: body.question, openedAt: row.openedAt });
     let swarm = "";
     if (m.requestId !== "0x" + "0".repeat(64)) {
       const [k, a] = await pub.readContract({ address: REG, abi: regAbi, functionName: "get", args: [m.requestId] }).catch(() => [null]);
-      if (k) swarm = k.status === 1 ? "The swarm is answering…" : k.status === 2 ? `Swarm answered ${a.answer.endsWith("1") ? "Yes" : "No"}, ${a.agreed}/${a.panelSize} agreed, verified onchain` : "Swarm: no consensus";
+      if (k) swarm = k.status === 1 ? "The swarm is answering…" : k.status === 2 ? `${a.agreed}/${a.panelSize} AI agents agreed · verified onchain` : "No verdict from the swarm";
     }
     const canStake = ph === "open" && now < Number(m.closeAt);
     const act = ph === "open" && now >= Number(m.resolveAfter) ? ["resolve", "Ask the swarm now"] : ph === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
-    const row = (data.rows || []).find((r) => String(r.id) === String(id)) || { history: [], trades: [], claims: [] };
-    const banner = ph === "yes" || ph === "no"
-      ? `<div class="banner ${ph}">Resolved ${ph.toUpperCase()} · ${esc(swarm)}<small>Winners split the losing side less 2%. ${row.claims.length} claimed so far.${row.settleTx ? ` <a href="https://etherscan.io/tx/${row.settleTx}">settle tx</a>` : ""}</small></div>`
-      : ph === "void" ? `<div class="banner void">Void · everyone refunded<small>No consensus, one side empty, or no answer in time. Claim your stake back below.</small></div>`
-      : ph === "asked" ? `<div class="banner asked">Betting closed · the swarm is answering<small>${esc(swarm || "Usually 2–3 minutes. The keeper settles it automatically.")}</small></div>`
-      : now >= Number(m.closeAt) ? `<div class="banner asked">Betting closed<small>The keeper asks the swarm within the hour after ${fmt(m.resolveAfter)}.</small></div>` : "";
-    $("#view").innerHTML = `<div class="card"><span class="tag ${ph}">${ph === "yes" ? "resolved YES" : ph === "no" ? "resolved NO" : ph}</span>
-      <p class="q">${esc(title({ question: body.question, openedAt: row.openedAt }))}</p>${title({ question: body.question, openedAt: row.openedAt }) !== body.question ? `<div class="sub2">settles on: ${esc(body.question)}</div>` : ""}${banner}${bar(m.yesPool, m.noPool, ["yes", "no", "void"].includes(ph))}
-      <div class="chart" id="chart"></div>
-      <div class="meta">Yes pool ${imd(m.yesPool)} IMD · No pool ${imd(m.noPool)} IMD<br>betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}${swarm && !["yes", "no"].includes(ph) ? "<br>" + esc(swarm) : ""}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · share <a href="?id=${id}">${location.host}/market?id=${id}</a></div>
-      ${canStake ? `<div class="row" style="margin-top:12px"><div><input id="amt" type="number" min="0.01" step="0.01" value="0.1"></div><div style="display:flex;gap:8px"><button class="y" id="by">Bet YES</button><button class="n" id="bn">Bet NO</button></div></div><div class="pay" id="pay"></div>` : ""}
-      ${act ? `<button id="act" style="width:100%;margin-top:12px">${act[1]}</button>` : ""}
-      ${["yes", "no", "void"].includes(ph) ? `<button id="claim" style="width:100%;margin-top:12px">Claim my winnings / refund</button>` : ""}
-      <div class="tabs"><button class="on" data-t="trades">Trades (${row.trades.length})</button><button data-t="claims">Claims (${row.claims.length})</button><button data-t="rules">Rules</button></div>
-      <div id="tab"></div>
-      <div class="log" id="vlog"></div></div>`;
+    const y = Number(formatEther(m.yesPool)), n = Number(formatEther(m.noPool)), pct = y + n ? Math.round((y * 100) / (y + n)) : 50;
+    const left = Number(m.closeAt) - now, leftTxt = left <= 0 ? "betting closed" : left < 3600 ? `closes in ${Math.ceil(left / 60)}m` : left < 86400 ? `closes in ${Math.round(left / 3600)}h` : `closes in ${Math.round(left / 86400)}d`;
+    const status = ph === "yes" || ph === "no" ? `<div class="res ${ph}"><b>${ph.toUpperCase()} won</b><span>${esc(swarm)}</span></div>`
+      : ph === "void" ? `<div class="res void"><b>No verdict, everyone refunded</b><span>Tap Claim to get your stake back</span></div>`
+      : ph === "asked" ? `<div class="res wait"><b>The swarm is answering…</b><span>Usually 2–3 minutes, paid out automatically</span></div>`
+      : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter).slice(11)}, paid out automatically</span></div>` : "";
+    const k1 = mults(m.yesPool, m.noPool, 0.01);
+    $("#view").innerHTML = `<div class="mk">
+      <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets</span></div>
+      <h2 class="mt">${esc(T)}</h2>
+      ${status}
+      ${canStake ? `<div class="sides"><button class="side y on" data-s="1"><small>YES</small><b>${pct}%</b><span>pays ${fx(k1.yes)}</span></button><button class="side n" data-s="0"><small>NO</small><b>${100 - pct}%</b><span>pays ${fx(k1.no)}</span></button></div>
+        <div class="chips">${[0.1, 0.5, 1, 5].map((v) => `<button data-v="${v}"${v === 0.1 ? ' class="on"' : ""}>${v}</button>`).join("")}<input id="amt" type="number" inputmode="decimal" min="0.01" step="0.01" value="0.1" aria-label="IMD amount"></div>
+        <button class="cta" id="cta"></button>` : `<div class="final"><span class="y" style="width:${Math.max(pct, 8)}%">YES ${pct}%</span><span class="n">${100 - pct}% NO</span></div>`}
+      ${act ? `<button class="cta alt" id="act">${act[1]}</button>` : ""}
+      ${["yes", "no", "void"].includes(ph) ? `<button class="cta" id="claim">Claim winnings / refund</button>` : ""}
+      <div class="log" id="vlog"></div>
+      <div id="chart"></div>
+      <details class="more"><summary>Bets (${row.trades.length})</summary><div id="trades"></div></details>
+      <details class="more"><summary>How it settles</summary><div class="rules"></div></details>
+    </div>`;
     chartBox(m, row, body);
-    const tabs = {
-      trades: () => row.trades.length ? `<table><tr><th>time</th><th>trader</th><th>side</th><th>IMD</th></tr>${row.trades.slice().reverse().map((x) => `<tr><td>${fmt(x.t).slice(5, 16)}</td><td><a href="https://etherscan.io/tx/${x.tx}">${x.user.slice(0, 6)}…${x.user.slice(-4)}</a></td><td>${x.side.toUpperCase()}</td><td>${imd(x.amount)}</td></tr>`).join("")}</table>` : `<p class="meta">No bets yet.</p>`,
-      claims: () => row.claims.length ? `<table><tr><th>time</th><th>wallet</th><th>IMD</th></tr>${row.claims.map((x) => `<tr><td>${fmt(x.t).slice(5, 16)}</td><td><a href="https://etherscan.io/tx/${x.tx}">${x.user.slice(0, 6)}…${x.user.slice(-4)}</a></td><td>${imd(x.amount)}</td></tr>`).join("")}</table>` : `<p class="meta">Nothing claimed yet.</p>`,
-      rules: () => `<div class="meta" style="margin-top:8px">Resolves from the IMD swarm's answer to the exact question above, bought through <a href="https://etherscan.io/address/${REG}">AskSwarmRegistry</a> and verified onchain. Panel ${body.panelSize ?? "?"}, quorum ${body.quorum ?? "?"}; a strict majority of at least 7 agents must agree. YES wins on a verified Yes, NO on a verified No. A split panel, a refusal, a one-sided market or no answer within 3 days voids the market and refunds everyone. 2% of the losing side is taken only on a settled market: half to the creator, half to fund free asks. Betting closes ${fmt(m.closeAt)}; the swarm must be asked within an hour after ${fmt(m.resolveAfter)}, which the keeper does automatically.${row.requestId ? ` Registry request ${row.requestId.slice(0, 10)}….` : ""}</div>`,
-    };
-    const showTab = (k) => { $("#tab").innerHTML = tabs[k](); document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === k)); };
-    document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.t)));
-    showTab("trades");
-    const share = document.createElement("a");
-    share.href = `https://x.com/intent/post?text=${encodeURIComponent(`${title({ question: body.question, openedAt: row.openedAt })} 🎲 Yes ${Math.round(Number(m.yesPool) * 100 / Math.max(Number(m.yesPool) + Number(m.noPool), 1))}% on AskSwarm. 1,000 AI agents from the IMD swarm settle it onchain, nobody can rig the answer.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id)}`;
-    share.target = "_blank"; share.className = "meta"; share.textContent = "share on X ↗"; share.style.display = "inline-block"; share.style.marginTop = "8px";
-    $("#vlog").before(share);
-    if ($("#pay")) {
-      const upd = () => { const a = Number($("#amt").value) || 0; if (a <= 0) return ($("#pay").innerHTML = ""); const k = mults(m.yesPool, m.noPool, a);
-        $("#pay").innerHTML = `<span>If YES wins: <b>${(a * k.yes).toFixed(3)} IMD</b> (${fx(k.yes)})</span><span>If NO wins: <b>${(a * k.no).toFixed(3)} IMD</b> (${fx(k.no)})</span>`; };
-      $("#amt").oninput = upd; upd();
-    }
+    $("#trades").innerHTML = row.trades.length ? row.trades.slice().reverse().map((x) => `<div class="trow"><span>${x.user.slice(0, 6)}…${x.user.slice(-4)}</span><b class="${x.side === "yes" ? "ty" : "tn"}">${x.side.toUpperCase()}</b><span>${imd(x.amount)} IMD</span><a href="https://etherscan.io/tx/${x.tx}">${ago(x.t)}</a></div>`).join("") : `<p class="meta">No bets yet. Be first.</p>`;
+    document.querySelector(".rules").innerHTML = `<p>The swarm is asked exactly: <i>“${esc(body.question)}”</i></p>
+      <p>${body.panelSize ?? 15} AI agents answer; a clear majority (at least 7) must agree, and AskSwarmRegistry verifies their signature onchain. YES wins on Yes, NO on No. Split vote, one-sided market or no answer within 3 days: everyone is refunded.</p>
+      <p>Winners split the losing side. 2% of it goes half to the market's creator, half to fund free asks.</p>
+      <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id)}" target="_blank">share on X</a></p>`;
+
     const log = logger($("#vlog"));
-    const run = (fn) => async (e) => { e.target.disabled = true; try { await fn(); log("Done.", "ok"); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); e.target.disabled = false; } };
-    const bet = (yes) => run(async () => { const { w, account } = await wallet(); const amt = parseEther(String($("#amt").value || "0")); await allow(w, account, amt, log); await send(w, account, "stake", [BigInt(id), yes, amt], log); });
-    if (canStake) { $("#by").onclick = bet(true); $("#bn").onclick = bet(false); }
-    if (act) $("#act").onclick = run(async () => { const { w, account } = await wallet(); await send(w, account, act[0], [BigInt(id)], log); });
-    if ($("#claim")) $("#claim").onclick = run(async () => { const { w, account } = await wallet(); const c = await pub.readContract({ address: M, abi: mAbi, functionName: "claimable", args: [BigInt(id), account] }); if (c === 0n) throw new Error("Nothing to claim for this wallet."); log(`Claiming ${imd(c)} IMD`); await send(w, account, "claim", [BigInt(id)], log); });
+    const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+    const run = (fn, btn) => async () => { if (btn) btn.disabled = true; try { await fn(); log("Done.", "ok"); setTimeout(() => location.reload(), 1500); } catch (err) { log(err?.shortMessage || err?.message || String(err), "err"); if (btn) btn.disabled = false; } };
+    if (canStake) {
+      let side = true;
+      const amt = () => Number($("#amt").value) || 0;
+      const label = () => { const a = amt(); if (a <= 0) return "Enter an amount"; const k = mults(m.yesPool, m.noPool, a); const win = a * (side ? k.yes : k.no); return `Bet ${a} IMD on ${side ? "YES" : "NO"} · win ${win.toFixed(3)} IMD`; };
+      const upd = () => { $("#cta").textContent = label(); $("#cta").className = "cta " + (side ? "y" : "n"); if (tg) { tg.MainButton.setParams({ text: label(), color: side ? "#4FCD4C" : "#FF87A6", text_color: "#1F1A23", is_visible: amt() > 0 }); } };
+      document.querySelectorAll(".side").forEach((b) => (b.onclick = () => { side = b.dataset.s === "1"; document.querySelectorAll(".side").forEach((x) => x.classList.toggle("on", x === b)); upd(); tg?.HapticFeedback?.selectionChanged(); }));
+      document.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => { $("#amt").value = b.dataset.v; document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", x === b)); upd(); }));
+      $("#amt").oninput = () => { document.querySelectorAll(".chips button").forEach((x) => x.classList.toggle("on", Number(x.dataset.v) === amt())); upd(); };
+      const doBet = run(async () => { const { w, account } = await wallet(); const a = parseEther(String(amt())); await allow(w, account, a, log); await send(w, account, "stake", [BigInt(id), side, a], log); }, $("#cta"));
+      $("#cta").onclick = doBet;
+      if (tg) { $("#cta").hidden = true; tg.MainButton.onClick(doBet); }
+      upd();
+    }
+    if (act) $("#act").onclick = run(async () => { const { w, account } = await wallet(); await send(w, account, act[0], [BigInt(id)], log); }, $("#act"));
+    if ($("#claim")) $("#claim").onclick = run(async () => { const { w, account } = await wallet(); const c = await pub.readContract({ address: M, abi: mAbi, functionName: "claimable", args: [BigInt(id), account] }); if (c === 0n) throw new Error("Nothing to claim for this wallet."); log(`Claiming ${imd(c)} IMD`); await send(w, account, "claim", [BigInt(id)], log); }, $("#claim"));
   }
 
   // open form
