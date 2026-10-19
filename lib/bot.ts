@@ -11,7 +11,7 @@ import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
 import { recall } from "./recall";
 import { quickTake } from "./quick";
-import { marketTitle, miniAppLink } from "./announce";
+import { marketTitle, miniAppLink, inTime } from "./announce";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
@@ -293,9 +293,9 @@ bot.command("markets", async (ctx) => {
   const lines = open.map((r) => {
     const y = Number(r.yesPool) / 1e18, n = Number(r.noPool) / 1e18, pct = y + n ? Math.round((y * 100) / (y + n)) : 50;
     const daily = r.openedAt && new Date(r.openedAt * 1000).toISOString().slice(0, 10) === new Date((r.closeAt - 3600) * 1000).toISOString().slice(0, 10);
-    const hrs = Math.max(1, Math.round((r.closeAt - now) / 3600));
+    const closesIn = inTime(r.closeAt - now);
     go(`#${r.id} · YES ${pct}%`, r.id); kb.row();
-    return `🎲 <b>#${r.id}</b> ${esc(marketTitle(r.question, !!daily))}\n   YES ${pct}% · ${(y + n).toFixed(2)} IMD · closes in ${hrs}h`;
+    return `🎲 <b>#${r.id}</b> ${esc(marketTitle(r.question, !!daily))}\n   YES ${pct}% · ${(y + n).toFixed(2)} IMD · closes in ${closesIn}`;
   });
   go("All markets");
   return ctx.reply(`<b>Open markets</b>, settled by the IMD swarm:\n\n${lines.join("\n\n")}`, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });

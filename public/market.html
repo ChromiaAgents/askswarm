@@ -161,7 +161,8 @@
   const pub = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
   const data = await fetch("/api/markets").then((r) => r.json()).catch(() => ({}));
   const M = data.market, REG = data.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
-  const fmt = (ts) => new Date(Number(ts) * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  // Local time in the viewer's own timezone (Telegram's webview and browsers both know it).
+  const fmt = (ts) => new Date(Number(ts) * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   const imd = (v) => { const n = Number(formatEther(BigInt(v))); return n.toLocaleString(undefined, { maximumFractionDigits: n > 0 && n < 0.01 ? 4 : 2 }); };
   const MON = { January: "Jan", February: "Feb", March: "Mar", April: "Apr", May: "May", June: "Jun", July: "Jul", August: "Aug", September: "Sep", October: "Oct", November: "Nov", December: "Dec" };
   // Plain-English title for the swarm's past-tense question. The question itself is what settles.
@@ -244,7 +245,7 @@
     const xy = points.map((p) => [X(p.t), Y(p.v)]);
     const path = step ? "M" + xy.map((q) => q.join(",")).join("L") : smooth(xy);
     const ticks = range ? [0, 25, 50, 75, 100] : [0, 1, 2, 3].map((i) => lo + pad + ((hi - lo - 2 * pad) * i) / 3);
-    const span = t1 - t0, xf = (t) => { const d = new Date(t * 1000); return span < 86400 ? d.toISOString().slice(11, 16) : d.toISOString().slice(5, 10); };
+    const span = t1 - t0, xf = (t) => { const d = new Date(t * 1000); return span < 2 * 86400 ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
     const xt = [0, 0.25, 0.5, 0.75, 1].map((f) => t0 + f * span);
     const id = "c" + Math.random().toString(36).slice(2, 7), last = xy[xy.length - 1];
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
@@ -269,7 +270,7 @@
       const p = points[k], px = X(p.t), py = Y(p.v);
       g.style.display = ""; g.querySelector(".hl").setAttribute("x1", px); g.querySelector(".hl").setAttribute("x2", px);
       g.querySelector(".hd").setAttribute("cx", px); g.querySelector(".hd").setAttribute("cy", py);
-      const ht = g.querySelector(".ht"); ht.setAttribute("x", Math.min(Math.max(px, 40), iw - 40)); ht.textContent = new Date(p.t * 1000).toISOString().slice(span < 86400 ? 11 : 5, 19).replace("T", " ");
+      const ht = g.querySelector(".ht"); ht.setAttribute("x", Math.min(Math.max(px, 40), iw - 40)); ht.textContent = new Date(p.t * 1000).toLocaleString(undefined, span < 86400 ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
       const hv = g.querySelector(".hvv"); hv.setAttribute("x", px - 8); hv.setAttribute("y", py - 8); hv.textContent = fmtV(p.v);
     };
     svg.onmouseleave = () => (g.style.display = "none");
@@ -337,7 +338,7 @@
     const status = ph === "yes" || ph === "no" ? `<div class="res ${ph}"><b>${ph.toUpperCase()} won</b><span>${esc(swarm)}</span></div>`
       : ph === "void" ? `<div class="res void"><b>No verdict, everyone refunded</b><span>Tap Claim to get your stake back</span></div>`
       : ph === "asked" ? `<div class="res wait"><b>The swarm is answering…</b><span>Usually 2–3 minutes, paid out automatically</span></div>`
-      : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter).slice(11)}, paid out automatically</span></div>` : "";
+      : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, paid out automatically</span></div>` : "";
     const k1 = mults(m.yesPool, m.noPool, 0.01);
     $("#view").innerHTML = `<div class="mk">
       <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets</span></div>

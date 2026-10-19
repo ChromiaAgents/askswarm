@@ -25,8 +25,16 @@ export async function announce(html: string, button: { text: string; start: stri
     }).catch((e) => console.error("[announce]", e?.message ?? e))));
 }
 
+/** "6h 5m" style countdown; timezone-free, so every reader in the group sees the same thing. */
+export function inTime(sec: number) {
+  if (sec <= 0) return "now";
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+}
+const utc = (t: number) => { const d = new Date(t * 1000); return `${d.toISOString().slice(11, 16)} UTC ${d.getUTCDate()} ${Object.values(MONTHS)[d.getUTCMonth()]}`; };
+
 export const announceOpened = (id: number, question: string, closeAt: number, daily: boolean) =>
-  announce(`🎲 <b>${esc(marketTitle(question, daily))}</b>\nBetting closes ${new Date(closeAt * 1000).toISOString().slice(11, 16)} UTC${daily ? "" : ` on ${new Date(closeAt * 1000).toISOString().slice(0, 10)}`}. Pick Yes or No; 1,000 AI agents from the IMD swarm settle it onchain.`, { text: "Bet in Telegram", start: `m${id}` });
+  announce(`🎲 <b>${esc(marketTitle(question, daily))}</b>\nBetting closes in <b>${inTime(closeAt - Date.now() / 1000)}</b> (${utc(closeAt)}). Pick Yes or No; 1,000 AI agents from the IMD swarm settle it onchain.`, { text: "Bet in Telegram", start: `m${id}` });
 
 export const announceSettled = (id: number, question: string, outcome: "yes" | "no" | "void", detail: string) =>
   announce(outcome === "void"

@@ -90,7 +90,8 @@
   const pub = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
   const meta = await fetch("/api/wagers").then((r) => r.json()).catch(() => ({}));
   const WAGER = meta.wager;
-  const fmt = (ts) => new Date(Number(ts) * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  // Local time in the viewer's own timezone (Telegram's webview and browsers both know it).
+  const fmt = (ts) => new Date(Number(ts) * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
 
   async function wallet() {
