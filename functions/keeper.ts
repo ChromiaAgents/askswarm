@@ -10,6 +10,7 @@ import { announceOpened, announceSettled } from "../lib/announce";
 import { getLogsChunked } from "../lib/logs";
 import { privateKeyToAccount } from "viem/accounts";
 import { chainList, ACTIVE, type ChainCfg, transportFor } from "../lib/chains";
+import { subsEnabled, subscribers } from "../lib/subs";
 
 export const maxDuration = 300;
 const marketAbi = parseAbi([
@@ -174,7 +175,9 @@ export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });
   try {
-    return new Response(JSON.stringify({ acts: await runKeeper() }), { headers: { "content-type": "application/json" } });
+    const acts = await runKeeper();
+    const subs = subsEnabled ? (await subscribers().catch(() => null))?.length ?? null : "off"; // who market news reaches
+    return new Response(JSON.stringify({ acts, subs }), { headers: { "content-type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 502, headers: { "content-type": "application/json" } });
   }
