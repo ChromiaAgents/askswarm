@@ -268,6 +268,17 @@ Coinbase ETH-USD daily close on <today> above <price at open>?", betting closes 
 swarm is asked at 00:15 UTC, and the house seeds `DAILY_SEED_IMD` (0.1) on each side so the round
 is never one-sided. Every call it makes is permissionless; anyone can run the same loop.
 
+### Telegram as the front door
+
+- `/markets` lists open rounds with odds; each button opens the market inside Telegram.
+- The keeper posts to `BROADCAST_CHATS` when a round opens ("🎲 ETH up or down today? vs $2,425") and
+  when it settles ("✅ Resolved YES"), with a button into the market.
+- Groups only allow URL buttons, so links go through the `pay` Mini App with a start parameter
+  (`t.me/askswarm_bot/pay?startapp=m3`), which routes to `/market?id=3`; private chats open the page
+  as a web app directly.
+- Telegram's webview has no injected wallet, so the bet button offers MetaMask, Trust Wallet and
+  Coinbase Wallet deep links that reopen the same market inside that wallet's browser.
+
 ### The flywheel back to the dataset
 
 The split-risk model reads `evalengine/imd-oracle-outcomes`; the registry writes back to it. A daily
