@@ -396,7 +396,14 @@
   }
   $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool, 0.01); return ` · <span class="mult">YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
   if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;
-  else if (P.get("id")) { $("#newbox").hidden = true; $("#list").hidden = true; await showMarket(P.get("id")); }
+  else if (P.get("id")) {
+    // Single market: straight to the market, especially on a phone inside Telegram.
+    $("#newbox").hidden = true; $("#list").hidden = true;
+    for (const sel of ["h1", ".sub", "#stats"]) { const el = document.querySelector(".wrap " + sel); if (el) el.hidden = true; }
+    const back = document.createElement("a"); back.href = "/market"; back.className = "meta"; back.textContent = "← all markets"; back.style.display = "inline-block"; back.style.marginBottom = "10px";
+    $("#view").before(back);
+    await showMarket(P.get("id"));
+  }
   else if (P.get("q")) { $("#newbox").open = true; $("#q").value = P.get("q"); checkQ(); }
 </script>
 </body>
