@@ -8,4 +8,5 @@
 50.2	16.5	When a round closes, the swarm answers it. Eleven of fifteen agents agreed, verified on chain. The winner taps claim, and is paid on chain.
 67.3	3.8	No browser wallet? Connect any wallet app.
 71.3	9.4	And every answer bought through the registry is public, and verified on chain.
-81.0	3.8	AskSwarm. Built by Chromia and Eval Engine.
+80.0	14.5	That's the loop. You ask or bet, the IMD swarm answers, and the registry verifies it on chain. Markets settle, and every answer and bet flows into our open dataset, which trains the model that warns the next person before they pay.
+95.0	3.8	AskSwarm. Built by Chromia and Eval Engine.
