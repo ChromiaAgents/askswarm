@@ -99,8 +99,8 @@
   const data = await fetch("/api/markets").then((r) => r.json()).catch(() => ({}));
   const M = data.market, REG = data.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
   const fmt = (ts) => new Date(Number(ts) * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const imd = (v) => Number(formatEther(BigInt(v))).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const bar = (y, n) => { const t = Number(y) + Number(n); const p = t ? Math.round(Number(y) * 100 / t) : 50; return `<div class="bar"><div class="y" style="width:${Math.max(p, 12)}%">YES ${p}%</div><div class="n">${100 - p}% NO</div></div>`; };
+  const imd = (v) => { const n = Number(formatEther(BigInt(v))); return n.toLocaleString(undefined, { maximumFractionDigits: n > 0 && n < 0.01 ? 4 : 2 }); };
+  const bar = (y, n, final) => { const t = Number(y) + Number(n); const p = t ? Math.round(Number(y) * 100 / t) : 50; return (final ? `<div class="meta" style="margin-top:8px">final pool split</div>` : "") + `<div class="bar"><div class="y" style="width:${Math.max(p, 12)}%">YES ${p}%</div><div class="n">${100 - p}% NO</div></div>`; };
   const logger = (el) => (t, cls = "") => { const d = document.createElement("div"); d.textContent = t; d.className = cls; el.appendChild(d); };
   async function wallet() {
     if (!window.ethereum) throw new Error("No wallet in this browser. Open the page in MetaMask or Rabby, or on desktop with the extension.");
@@ -156,9 +156,9 @@
       : ph === "asked" ? `<div class="banner asked">Betting closed · the swarm is answering<small>${esc(swarm || "Usually 2–3 minutes. The keeper settles it automatically.")}</small></div>`
       : now >= Number(m.closeAt) ? `<div class="banner asked">Betting closed<small>The keeper asks the swarm within the hour after ${fmt(m.resolveAfter)}.</small></div>` : "";
     $("#view").innerHTML = `<div class="card"><span class="tag ${ph}">${ph === "yes" ? "resolved YES" : ph === "no" ? "resolved NO" : ph}</span>
-      <p class="q">${esc(body.question)}</p>${banner}${bar(m.yesPool, m.noPool)}
+      <p class="q">${esc(body.question)}</p>${banner}${bar(m.yesPool, m.noPool, ["yes", "no", "void"].includes(ph))}
       <div class="chart" id="chart"></div>
-      <div class="meta">Yes pool ${imd(m.yesPool)} IMD · No pool ${imd(m.noPool)} IMD<br>betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}${swarm ? "<br>" + esc(swarm) : ""}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · share <a href="?id=${id}">${location.host}/market?id=${id}</a></div>
+      <div class="meta">Yes pool ${imd(m.yesPool)} IMD · No pool ${imd(m.noPool)} IMD<br>betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}${swarm && !["yes", "no"].includes(ph) ? "<br>" + esc(swarm) : ""}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · share <a href="?id=${id}">${location.host}/market?id=${id}</a></div>
       ${canStake ? `<div class="row" style="margin-top:12px"><div><input id="amt" type="number" min="0.01" step="0.01" value="1"></div><div style="display:flex;gap:8px"><button class="y" id="by">Bet YES</button><button class="n" id="bn">Bet NO</button></div></div>` : ""}
       ${act ? `<button id="act" style="width:100%;margin-top:12px">${act[1]}</button>` : ""}
       ${["yes", "no", "void"].includes(ph) ? `<button id="claim" style="width:100%;margin-top:12px">Claim my winnings / refund</button>` : ""}
@@ -220,7 +220,7 @@
     if (now >= r.closeAt) return { tag: `<span class="tag">closed</span>`, line: "betting closed · keeper asks the swarm shortly" };
     return { tag: `<span class="tag">open</span>`, line: `betting closes in ${until(r.closeAt)}` };
   };
-  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(r.question)}</p>${bar(r.yesPool, r.noPool)}<div class="meta">${st.line}</div></div></a>`; }).join("");
+  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(r.question)}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}</div></div></a>`; }).join("");
   if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;
   else if (P.get("id")) { $("#newbox").hidden = true; $("#list").hidden = true; await showMarket(P.get("id")); }
   else if (P.get("q")) { $("#newbox").open = true; $("#q").value = P.get("q"); checkQ(); }
