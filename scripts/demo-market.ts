@@ -2,12 +2,13 @@
 //   bun scripts/demo-market.ts "<yes/no question>" <closeInSeconds> <houseYesIMD> <demoNoIMD>
 import { createPublicClient, createWalletClient, http, parseAbi, erc20Abi, parseEther, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { ACTIVE } from "../lib/chains";
+const mainnet = ACTIVE.viem; // ACTIVE_CHAIN_ID picks the chain (4663 Robinhood, 1 Ethereum)
 import * as imd from "../packages/imd/src/index";
 
-const M = process.env.MARKET_ADDRESS as Hex, IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
+const M = ACTIVE.market as Hex, IMD = ACTIVE.imd;
 const [q = "Did Argentina win the 2022 FIFA World Cup?", closeIn = "300", yesAmt = "1", noAmt = "0.1"] = process.argv.slice(2);
-const t = http(process.env.ETH_RPC_URL);
+const t = http(ACTIVE.rpc);
 const pub = createPublicClient({ chain: mainnet, transport: t });
 const A = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as Hex), B = privateKeyToAccount(process.env.DEMO_PK as Hex);
 const wa = createWalletClient({ account: A, chain: mainnet, transport: t }), wb = createWalletClient({ account: B, chain: mainnet, transport: t });

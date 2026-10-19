@@ -74,7 +74,7 @@
 </div>
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex } from "https://esm.sh/viem@2.57.7";
-  import { mainnet } from "https://esm.sh/viem@2.57.7/chains";
+  import { chainMap, viemChain, pubFor, switchTo, addr as addrLink, badge } from "/chain.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -87,9 +87,10 @@
   ]);
   const regAbi = parseAbi(["function price() view returns (uint256)", "function get(bytes32) view returns ((address asker,uint64 askedAt,uint8 status) k,(bytes32 questionHash,bytes answer,bytes32 answerHash,uint8 answerType,uint16 panelSize,uint16 quorum,uint16 agreed,uint64 issuedAt,uint64 expiresAt,bool verified) a)"]);
   const STATES = ["none", "open", "matched", "asked", "paid", "refunded"];
-  const pub = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
   const meta = await fetch("/api/wagers").then((r) => r.json()).catch(() => ({}));
-  const WAGER = meta.wager;
+  // ?c=<chainId> picks the chain for one wager (none = Ethereum, old links); create uses the active chain.
+  const CH = chainMap(meta.chains), C = CH[P.get("id") ? Number(P.get("c") || 1) : Number(meta.active || 1)] || CH[1];
+  const pub = pubFor(C), WAGER = C.wager, IMD = C.imd, REG = C.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
   // Local time in the viewer's own timezone (Telegram's webview and browsers both know it).
   const fmt = (ts) => new Date(Number(ts) * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
@@ -108,9 +109,9 @@
       box.scrollIntoView({ behavior: "smooth", block: "start" });
       throw new Error("Open this page in your wallet app to sign (options above).");
     }
-    const w = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
+    const w = createWalletClient({ chain: viemChain(C), transport: custom(window.ethereum) });
     const [account] = await w.requestAddresses();
-    if ((await w.getChainId()) !== 1) await w.switchChain({ id: 1 });
+    await switchTo(w, C);
     return { w, account };
   }
   async function ensureAllowance(w, account, imd, amount, log) {
@@ -129,22 +130,22 @@
     const st = STATES[w.state];
     let answerLine = "";
     if (w.requestId !== "0x" + "0".repeat(64)) {
-      const [k, a] = await pub.readContract({ address: meta.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd", abi: regAbi, functionName: "get", args: [w.requestId] }).catch(() => [null, null]);
+      const [k, a] = await pub.readContract({ address: REG, abi: regAbi, functionName: "get", args: [w.requestId] }).catch(() => [null, null]);
       if (k) answerLine = k.status === 2 ? `swarm answered ${a.answer.endsWith("1") ? "Yes" : "No"} · ${a.agreed}/${a.panelSize} agreed · verified onchain` : k.status === 1 ? "swarm is working…" : `swarm: ${["", "", "", "refused", "no consensus", "unverified", "lost"][k.status]}`;
     }
     const now = Date.now() / 1000;
     const action = st === "open" ? (now <= Number(w.joinBy) ? ["join", `Take the ${w.yes === "0x0000000000000000000000000000000000000000" ? "Yes" : "No"} side · stake ${formatEther(w.stake)} IMD`] : ["cancel", "Cancel (nobody joined)"])
       : st === "matched" ? (now >= Number(w.resolveAfter) ? ["resolve", "Ask the swarm now"] : null)
       : st === "asked" ? ["settle", "Settle from the swarm's answer"] : null;
-    $("#view").innerHTML = `<div class="card"><span class="pill ${st}">${st}</span><p class="q">${esc(body.question)}</p>
-      <div class="meta">Yes: ${short(w.yes)} · No: ${short(w.no)} · stake ${formatEther(w.stake)} IMD each<br>join by ${fmt(w.joinBy)} · ask after ${fmt(w.resolveAfter)}${answerLine ? "<br>" + esc(answerLine) : ""}${w.winner !== "0x0000000000000000000000000000000000000000" ? "<br>winner " + short(w.winner) : ""}<br>wager #${id} · <a href="https://etherscan.io/address/${WAGER}">contract</a> · share: <a href="?id=${id}">${location.origin}/wager?id=${id}</a></div>
+    $("#view").innerHTML = `<div class="card">${badge(C)} <span class="pill ${st}">${st}</span><p class="q">${esc(body.question)}</p>
+      <div class="meta">Yes: ${short(w.yes)} · No: ${short(w.no)} · stake ${formatEther(w.stake)} IMD each<br>join by ${fmt(w.joinBy)} · ask after ${fmt(w.resolveAfter)}${answerLine ? "<br>" + esc(answerLine) : ""}${w.winner !== "0x0000000000000000000000000000000000000000" ? "<br>winner " + short(w.winner) : ""}<br>wager #${id} on ${C.name} · <a href="${addrLink(C, WAGER)}">contract</a> · share: <a href="?id=${id}&c=${C.id}">${location.origin}/wager?id=${id}&c=${C.id}</a></div>
       ${action ? `<button class="go" id="act">${esc(action[1])}</button>` : ""}<div class="log" id="vlog"></div></div>`;
     if (!action) return;
     $("#act").onclick = async () => {
       const log = logger($("#vlog")); $("#act").disabled = true;
       try {
         const { w: wc, account } = await wallet();
-        if (action[0] === "join") await ensureAllowance(wc, account, "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", w.stake, log);
+        if (action[0] === "join") await ensureAllowance(wc, account, IMD, w.stake, log);
         log("Confirm in your wallet…");
         const h = await wc.writeContract({ account, address: WAGER, abi: wagerAbi, functionName: action[0], args: [BigInt(id)] });
         await pub.waitForTransactionReceipt({ hash: h });
@@ -172,22 +173,22 @@
     try {
       const { w, account } = await wallet();
       const stake = parseEther(String($("#stake").value || "0"));
-      const fee = await pub.readContract({ address: meta.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd", abi: regAbi, functionName: "price" });
-      await ensureAllowance(w, account, "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", stake + fee, log);
+      const fee = await pub.readContract({ address: REG, abi: regAbi, functionName: "price" });
+      await ensureAllowance(w, account, IMD, stake + fee, log);
       const now = Math.floor(Date.now() / 1000), joinBy = now + Number($("#join").value), after = Math.max(joinBy, Math.floor(new Date($("#after").value).getTime() / 1000));
       log(`Stake ${formatEther(stake)} IMD + swarm fee ${formatEther(fee)} IMD. Confirm in your wallet…`);
       const h = await w.writeContract({ account, address: WAGER, abi: wagerAbi, functionName: "create", args: [stringToHex(JSON.stringify(draft)), side, stake, BigInt(joinBy), BigInt(after)] });
       const rc = await pub.waitForTransactionReceipt({ hash: h });
       const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === WAGER.toLowerCase()).topics[1]);
       log(`Wager #${id} created. Send the link to your counterparty.`, "ok");
-      history.replaceState(null, "", "?id=" + id); $("#create").hidden = true; showWager(id);
+      history.replaceState(null, "", "?id=" + id + "&c=" + C.id); $("#create").hidden = true; showWager(id);
     } catch (e) { log(e?.shortMessage || e?.message || String(e), "err"); $("#createBtn").disabled = false; }
   };
 
   // ---- list ----
   function list() {
     const rows = meta.rows || [];
-    $("#list").innerHTML = rows.length ? rows.map((r) => `<div class="card"><span class="pill ${r.state}">${r.state}</span> <a href="?id=${r.id}" class="q" style="color:inherit">${esc(r.question)}</a><div class="meta">#${r.id} · ${formatEther(BigInt(r.stake))} IMD each${r.answer ? " · swarm said " + r.answer : ""}</div></div>`).join("") : "";
+    $("#list").innerHTML = rows.length ? rows.map((r) => `<div class="card">${badge(CH[r.chainId || 1])} <span class="pill ${r.state}">${r.state}</span> <a href="?id=${r.id}&c=${r.chainId || 1}" class="q" style="color:inherit">${esc(r.question)}</a><div class="meta">#${r.id} · ${formatEther(BigInt(r.stake))} IMD each${r.answer ? " · swarm said " + r.answer : ""}</div></div>`).join("") : "";
   }
 
   if (!WAGER) $("#view").innerHTML = `<div class="card">The wager contract is being launched through IMD. Check back shortly.</div>`;

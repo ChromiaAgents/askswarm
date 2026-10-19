@@ -1,19 +1,19 @@
 // Hands-on demo recording of the live site on a phone-sized screen, with a real bet signed by the
-// demo wallet (DEMO_PK) through an injected EIP-1193 provider, so the transactions are real mainnet
-// transactions. Writes docs/demo/raw.webm and docs/demo/marks.json (phase timestamps for editing).
+// demo wallet (DEMO_PK) through an injected EIP-1193 provider, so the transactions are real
+// transactions on the active chain (Robinhood Chain). Writes docs/demo/raw.webm and docs/demo/marks.json (phase timestamps for editing).
 //   bun scripts/record-demo.ts [marketId]
 import puppeteer from "puppeteer-core";
 import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { ACTIVE } from "../lib/chains";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const BASE = "https://askswarm-nine.vercel.app";
 const MARKET = process.argv[2] ?? "3";
 const account = privateKeyToAccount(process.env.DEMO_PK as Hex);
-const transport = http(process.env.ETH_RPC_URL);
-const pub = createPublicClient({ chain: mainnet, transport });
-const wallet = createWalletClient({ account, chain: mainnet, transport });
+const transport = http(ACTIVE.rpc);
+const pub = createPublicClient({ chain: ACTIVE.viem, transport });
+const wallet = createWalletClient({ account, chain: ACTIVE.viem, transport });
 mkdirSync("docs/demo", { recursive: true });
 
 const browser = await puppeteer.launch({
@@ -28,8 +28,8 @@ await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" 
 // Wallet bridge: page asks, node signs with the demo key.
 await page.exposeFunction("__ethReq", async ({ method, params }: { method: string; params?: any[] }) => {
   if (method === "eth_requestAccounts" || method === "eth_accounts") return [account.address];
-  if (method === "eth_chainId") return "0x1";
-  if (method === "wallet_switchEthereumChain") return null;
+  if (method === "eth_chainId") return "0x" + ACTIVE.id.toString(16);
+  if (method === "wallet_switchEthereumChain" || method === "wallet_addEthereumChain") return null;
   if (method === "eth_sendTransaction") {
     const tx = params![0];
     return wallet.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ? BigInt(tx.value) : 0n });
@@ -62,7 +62,7 @@ try {
   await wait(2500); await smoothScroll(520, 1800); await wait(2000);
 
   mark("market");
-  await tap(`.cardlink[href="?id=${MARKET}"]`);
+  await tap(`.cardlink[href="?id=${MARKET}&c=${ACTIVE.id}"]`);
   await page.waitForSelector(".sides", { visible: true, timeout: 30_000 });
   await wait(3000);
 

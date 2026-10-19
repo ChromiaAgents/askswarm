@@ -24,7 +24,7 @@
 <div class="card">
   <img src="/logo.svg" alt="" width="56" height="56" style="border-radius:14px">
   <h1>Pay 0.5 IMD, ask the swarm</h1>
-  <div class="meta">From your own wallet on Ethereum mainnet. The signed attestation is addressed to you.</div>
+  <div class="meta" id="chainline">From your own wallet. The signed attestation is addressed to you.</div>
   <div class="q" id="q">Loading…</div>
   <div class="meta" id="draft"></div>
   <button id="go" disabled>Connect wallet</button>
@@ -32,7 +32,7 @@
 </div>
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, formatUnits } from "https://esm.sh/viem@2.57.7";
-  import { mainnet } from "https://esm.sh/viem@2.57.7/chains";
+  import { viemChain, switchTo, tx as txLink } from "/chain.js";
 
   const P = new URLSearchParams(location.search);
   const params = { c: P.get("c"), m: P.get("m"), q: P.get("q"), s: P.get("s") };
@@ -47,6 +47,8 @@
   const api = "/api/imd?" + new URLSearchParams(params);
   const draft = await fetch(api).then((r) => r.json());
   if (draft.error) { $("q").textContent = draft.error === "blocked" ? "The swarm won't take this one." : "This link is not valid."; throw new Error(draft.error); }
+  const CHAIN = draft.chain || { id: 1, name: "Ethereum", rpc: "https://ethereum-rpc.publicnode.com", explorer: "https://etherscan.io" };
+  $("chainline").textContent = `From your own wallet on ${CHAIN.name}. The signed attestation is addressed to you.`;
   $("draft").textContent = `${draft.request.answerType} · panel ${draft.request.panelSize}, quorum ${draft.request.quorum} · costs 0.5 IMD + gas, not refunded if the panel splits`;
 
   if (!window.ethereum) {
@@ -61,11 +63,11 @@
   $("go").onclick = async () => {
     const btn = $("go"); btn.disabled = true;
     try {
-      const wallet = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
-      const pub = createPublicClient({ chain: mainnet, transport: custom(window.ethereum) });
+      const wallet = createWalletClient({ chain: viemChain(CHAIN), transport: custom(window.ethereum) });
+      const pub = createPublicClient({ chain: viemChain(CHAIN), transport: http(CHAIN.rpc) });
       const [account] = await wallet.requestAddresses();
       log(`Wallet ${account.slice(0, 6)}…${account.slice(-4)}`);
-      if ((await wallet.getChainId()) !== 1) { btn.textContent = "Switch to Ethereum…"; await wallet.switchChain({ id: 1 }); }
+      if ((await wallet.getChainId()) !== CHAIN.id) { btn.textContent = `Switch to ${CHAIN.name}…`; await switchTo(wallet, CHAIN); }
 
       const amount = BigInt(draft.amount);
       // Through AskSwarmRegistry when deployed: the answer then lands onchain, verified, for everyone.
@@ -92,11 +94,11 @@
       if (rcpt.status !== "success") { log("Transaction reverted.", "err"); btn.textContent = "Reverted"; return; }
 
       btn.textContent = "Telling the bot…";
-      const res = await fetch("/api/imd", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...params, tx }) }).then((r) => r.json());
+      const res = await fetch("/api/imd", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...params, tx, chainId: CHAIN.id }) }).then((r) => r.json());
       if (!res.ok) { log(`Bot did not accept the tx: ${res.error}. Keep the hash: ${tx}`, "err"); btn.textContent = "Done, but not linked"; return; }
       log("Asked. Back in Telegram, tap Check status in 1–3 min.", "ok");
       btn.textContent = "Done";
-      const a = document.createElement("a"); a.href = `https://etherscan.io/tx/${tx}`; a.textContent = "View on Etherscan"; $("log").appendChild(a);
+      const a = document.createElement("a"); a.href = txLink(CHAIN, tx); a.textContent = "View on explorer"; $("log").appendChild(a);
     } catch (e) {
       log(e?.shortMessage || e?.message || String(e), "err");
       btn.textContent = "Try again"; btn.disabled = false;

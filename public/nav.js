@@ -20,6 +20,9 @@
     .sw-nav .sw-links a:hover{border-color:var(--ink,#1F1A23)}
     .sw-nav .sw-links a.on{background:var(--ink,#1F1A23);color:var(--bg,#F5EEEE)}
     .sw-nav .sw-cta{font:700 14px "NB International",Helvetica,Arial,sans-serif;background:#CC91F0;color:#1F1A23;border:2px solid var(--ink,#1F1A23);border-radius:999px;padding:8px 14px;text-decoration:none;white-space:nowrap;box-shadow:3px 3px 0 var(--ink,#1F1A23)}
+    .sw-nav .sw-chain{display:inline-flex;align-items:center;gap:6px;font:700 12px "NB International",Helvetica,Arial,sans-serif;background:#CCFF00;color:#1F1A23;border:2px solid var(--ink,#1F1A23);border-radius:999px;padding:4px 10px;text-decoration:none;white-space:nowrap}
+    .sw-nav .sw-chain i{width:7px;height:7px;border-radius:50%;background:#1F1A23;display:inline-block}
+    @media (max-width:640px){.sw-nav .sw-chain b{display:none}}
     @media (max-width:640px){.sw-nav .sw-in{gap:10px}.sw-nav .sw-brand span{display:none}.sw-nav .sw-cta{padding:7px 10px}}`;
   const st = document.createElement("style");
   st.textContent = css;
@@ -28,7 +31,7 @@
   h.className = "sw-nav";
   h.innerHTML = `<div class="sw-in"><a class="sw-brand" href="/"><img src="/logo.svg" alt=""><span>AskSwarm</span></a><div class="sw-links">${links
     .map(([href, label]) => `<a href="${href}"${href === path ? ' class="on"' : ""}${href.startsWith("http") ? ' target="_blank" rel="noopener"' : ""}>${label}</a>`)
-    .join("")}</div><a class="sw-cta" href="https://t.me/askswarm_bot" target="_blank" rel="noopener">Open bot</a></div>`;
+    .join("")}</div><a class="sw-chain" href="https://robinhoodchain.blockscout.com" target="_blank" rel="noopener" title="AskSwarm runs on Robinhood Chain (chainId 4663). Earlier Ethereum markets stay readable."><i></i>Robinhood<b>&nbsp;Chain</b></a><a class="sw-cta" href="https://t.me/askswarm_bot" target="_blank" rel="noopener">Open bot</a></div>`;
   // Full-bleed regardless of each page's body padding.
   const cs = getComputedStyle(document.body);
   h.style.marginLeft = "-" + cs.paddingLeft; h.style.marginRight = "-" + cs.paddingRight; h.style.marginTop = "-" + cs.paddingTop;

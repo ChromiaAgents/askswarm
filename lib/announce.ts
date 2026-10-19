@@ -33,10 +33,14 @@ export function inTime(sec: number) {
 }
 const utc = (t: number) => { const d = new Date(t * 1000); return `${d.toISOString().slice(11, 16)} UTC ${d.getUTCDate()} ${Object.values(MONTHS)[d.getUTCMonth()]}`; };
 
-export const announceOpened = (id: number, question: string, closeAt: number, daily: boolean) =>
-  announce(`🎲 <b>${esc(marketTitle(question, daily))}</b>\nBetting closes in <b>${inTime(closeAt - Date.now() / 1000)}</b> (${utc(closeAt)}). Pick Yes or No; 1,000 AI agents from the IMD swarm settle it onchain.`, { text: "Bet in Telegram", start: `m${id}` });
+// Mini App start param: "m3" = Ethereum market 3 (old links), "m3_4663" = Robinhood Chain market 3.
+const mStart = (id: number, chainId = 1) => chainId === 1 ? `m${id}` : `m${id}_${chainId}`;
+const chainTag = (chainId = 1) => chainId === 4663 ? " on Robinhood Chain" : " on Ethereum";
 
-export const announceSettled = (id: number, question: string, outcome: "yes" | "no" | "void", detail: string) =>
+export const announceOpened = (id: number, question: string, closeAt: number, daily: boolean, chainId = 1) =>
+  announce(`🎲 <b>${esc(marketTitle(question, daily))}</b>\nBetting closes in <b>${inTime(closeAt - Date.now() / 1000)}</b> (${utc(closeAt)}). Pick Yes or No; 1,000 AI agents from the IMD swarm settle it onchain${chainTag(chainId)}.`, { text: "Bet in Telegram", start: mStart(id, chainId) });
+
+export const announceSettled = (id: number, question: string, outcome: "yes" | "no" | "void", detail: string, chainId = 1) =>
   announce(outcome === "void"
     ? `↩️ <b>${esc(marketTitle(question))}</b>\nNo verdict (${esc(detail)}). Everyone gets their stake back.`
-    : `✅ <b>${esc(marketTitle(question))}</b>\nResolved <b>${outcome.toUpperCase()}</b>. ${esc(detail)} Winners can claim now.`, { text: outcome === "void" ? "Claim refund" : "See result", start: `m${id}` });
+    : `✅ <b>${esc(marketTitle(question))}</b>\nResolved <b>${outcome.toUpperCase()}</b>. ${esc(detail)} Winners can claim now.`, { text: outcome === "void" ? "Claim refund" : "See result", start: mStart(id, chainId) });

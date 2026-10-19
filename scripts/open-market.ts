@@ -1,11 +1,12 @@
 // Open a SwarmMarket from the house wallet without staking: bun scripts/open-market.ts "<q>" <closeAtISO> <resolveAfterISO>
 import { createPublicClient, createWalletClient, http, parseAbi, erc20Abi, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { ACTIVE } from "../lib/chains";
+const mainnet = ACTIVE.viem; // ACTIVE_CHAIN_ID picks the chain (4663 Robinhood, 1 Ethereum)
 import * as imd from "../packages/imd/src/index";
 const [q, closeIso, afterIso] = process.argv.slice(2);
-const M = process.env.MARKET_ADDRESS as Hex, IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
-const t = http(process.env.ETH_RPC_URL), pub = createPublicClient({ chain: mainnet, transport: t });
+const M = ACTIVE.market as Hex, IMD = ACTIVE.imd;
+const t = http(ACTIVE.rpc), pub = createPublicClient({ chain: mainnet, transport: t });
 const w = createWalletClient({ account: privateKeyToAccount(process.env.EVM_PRIVATE_KEY as Hex), chain: mainnet, transport: t });
 const chk = await imd.check(q, 15);
 if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => b.code !== "not_answerable")) throw new Error("not a usable yes/no question: " + JSON.stringify(chk.blockers));

@@ -9,13 +9,15 @@ import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
+import { ACTIVE, CHAINS as NET, txUrl as explorerTx, addrUrl } from "./chains";
 import { recall } from "./recall";
 import { quickTake } from "./quick";
 import { marketTitle, miniAppLink, inTime } from "./announce";
 
 const env = (k: string, d?: string) => process.env[k] ?? d ?? (() => { throw new Error(`missing env ${k}`); })();
 
-export const ASK_CHAIN = Number(process.env.ASK_CHAIN_ID ?? 11155111) as intake.IntakeChainId;
+// New asks go to the active chain (Robinhood Chain once its registry is configured, else Ethereum).
+export const ASK_CHAIN = Number(process.env.ASK_CHAIN_ID ?? ACTIVE.id) as intake.IntakeChainId;
 const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
 const PRICE_CHR = process.env.CPAY_PRICE_CHR ?? "2.00";
 const MAX_Q = 500;
@@ -75,15 +77,16 @@ export const cpay = () => process.env.CPAY_SECRET_KEY ? new ChromiaPay(process.e
 export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"), { client: { fetch: globalThis.fetch as any } });
 
 const esc = (s: unknown) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-const chainName = (id: number) => (id === 1 ? "Ethereum" : "Sepolia");
-const txUrl = (id: number, tx: string) => `https://${id === 1 ? "" : "sepolia."}etherscan.io/tx/${tx}`;
+const chainName = (id: number) => (id === 11155111 ? "Sepolia" : NET[id]?.name ?? "Ethereum");
+const txUrl = (id: number, tx: string) => (id === 11155111 ? `https://sepolia.etherscan.io/tx/${tx}` : explorerTx(id, tx));
+const explorerName = (id: number) => (id === 4663 ? "explorer" : "etherscan");
 
 // ---- message <-> state -------------------------------------------------------------------------
 // Line 1 of every status message is "❓ <question>". After asking, a line "tx <chain> <0x...>" is added.
 const parseQuestion = (text = "") => text.split("\n")[0]?.replace(/^❓\s*/, "").trim() ?? "";
 const parseTx = (text = "") => {
-  const m = text.match(/tx (Ethereum|Sepolia) (0x[0-9a-fA-F]{64})/);
-  return m ? { chainId: (m[1] === "Ethereum" ? 1 : 11155111) as intake.IntakeChainId, tx: m[2] as Hex } : null;
+  const m = text.match(/tx (Ethereum|Sepolia|Robinhood Chain) (0x[0-9a-fA-F]{64})/);
+  return m ? { chainId: ({ Ethereum: 1, Sepolia: 11155111, "Robinhood Chain": 4663 } as const)[m[1] as "Ethereum"] as intake.IntakeChainId, tx: m[2] as Hex } : null;
 };
 
 // ---- /ask ---------------------------------------------------------------------------------------
@@ -116,7 +119,7 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
   if (!raw) return ctx.reply("Usage: /ask <a factual question>\nOr /examples to pick one.");
   if (raw.length > MAX_Q) return ctx.reply(`Too long, max ${MAX_Q} chars.`);
 
-  const chk = await imd.check(raw, PANEL);
+  const chk = await imd.check(raw, PANEL, ASK_CHAIN === 11155111 ? undefined : ASK_CHAIN);
   if (hardBlockers(chk.blockers).length || !chk.request) {
     const why = hardBlockers(chk.blockers).map((b) => `• ${esc(b.detail)}`).join("\n") || "• no drafted request";
     return ctx.reply(`The swarm won't take that one:\n${why}`, { parse_mode: "HTML" });
@@ -163,23 +166,23 @@ async function ask(ctx: Context, input: string, replyTo?: number) {
     else kb.url(label, `https://t.me/${ctx.me.username}/pay?startapp=${csId}`);
   }
   // Pay in IMD from the user's own wallet: attestation is then addressed to them, not the house.
-  if (ASK_CHAIN === 1) {
+  if (ASK_CHAIN !== 11155111) {
     const p = await spot("imd");
     kb.row().url(`Pay 0.5 IMD${p ? ` (~${usd(0.5 * p)})` : ""} from your wallet`, imdPayUrl(ctx.chat!.id, status.message_id, r.question));
   }
-  if (pay || ASK_CHAIN === 1) await ctx.api.editMessageReplyMarkup(ctx.chat!.id, status.message_id, { reply_markup: kb });
+  if (pay || ASK_CHAIN !== 11155111) await ctx.api.editMessageReplyMarkup(ctx.chat!.id, status.message_id, { reply_markup: kb });
 }
 
 // ---- ask the swarm (shared by free button and paid webhook) --------------------------------------
 export async function markAsked(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId, tx: Hex, panelSize: number, who = "") {
   await bot.api.editMessageText(chatId, msgId,
-    `❓ ${esc(question)}\n⏳ Asked the swarm on ${chainName(chainId)}${who}. Panel of ${panelSize} is assessing, usually 1–3 min.\ntx ${chainName(chainId)} ${tx}\n<a href="${txUrl(chainId, tx)}">etherscan</a>`,
+    `❓ ${esc(question)}\n⏳ Asked the swarm on ${chainName(chainId)}${who}. Panel of ${panelSize} is assessing, usually 1–3 min.\ntx ${chainName(chainId)} ${tx}\n<a href="${txUrl(chainId, tx)}">${explorerName(chainId)}</a>`,
     { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: new InlineKeyboard().text("Check status", "chk") });
   watch(chatId, msgId, question, chainId, tx);
 }
 
 export async function askAndMark(chatId: number | string, msgId: number, question: string, chainId: intake.IntakeChainId) {
-  const chk = await imd.check(question, PANEL);
+  const chk = await imd.check(question, PANEL, chainId === 11155111 ? undefined : chainId);
   if (!chk.request || hardBlockers(chk.blockers).length) throw new Error(`check failed: ${hardBlockers(chk.blockers).map((b) => b.code).join("; ")}`);
   if (intake.CHAINS[chainId].free) await intake.ensureAllowance(chainId, account());
   const tx = await intake.ask(chainId, account(), chk.request);
@@ -240,7 +243,7 @@ export async function refresh(chatId: number | string, msgId: number, question: 
     ? `\n<i>onchain: ${onchain.status === "answered" && onchain.verified ? "verified and stored in AskSwarmRegistry ✅" : `registry ${esc(onchain.status)}`}</i>`
     : "";
   await edit(
-    `❓ ${esc(question)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>${chainLine}\ntx ${chainName(chainId)} ${tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(chainId, tx)}">etherscan</a>${intake.REGISTRY ? ` · <a href="https://etherscan.io/address/${intake.REGISTRY}">registry</a>` : ""}`);
+    `❓ ${esc(question)}\n✅ <b>${esc(decodeAnswer(m))}</b>\n<i>${m.agreed}/${m.panelSize} agreed (quorum ${m.quorum}) · EIP-712 ${valid ? "verified" : "INVALID"} · signer ${esc(String(att.signer).slice(0, 10))}…</i>${chainLine}\ntx ${chainName(chainId)} ${tx}\n<a href="${imd.IMD_API}/oracle/requests/${requestId}/attestation">attestation</a>${jobLink} · <a href="${txUrl(chainId, tx)}">${explorerName(chainId)}</a>${intake.registryFor(chainId) ? ` · <a href="${addrUrl(chainId, intake.registryFor(chainId)!)}">registry</a>` : ""}`);
   return { done: true, note: onchain && onchain.status === "pending" ? "answered, registry callback landing" : "answered" };
 }
 
@@ -292,13 +295,13 @@ bot.command("markets", async (ctx) => {
   const open = rows.filter((r) => r.phase === "open" && now < r.closeAt).slice(0, 6);
   const kb = new InlineKeyboard();
   const priv = ctx.chat.type === "private";
-  const go = (label: string, id?: string) => priv ? kb.webApp(label, `${BASE_URL}/market${id ? `?id=${id}` : ""}`) : kb.url(label, miniAppLink(id ? `m${id}` : "markets"));
+  const go = (label: string, id?: string, c = 1) => priv ? kb.webApp(label, `${BASE_URL}/market${id ? `?id=${id}&c=${c}` : ""}`) : kb.url(label, miniAppLink(id ? (c === 1 ? `m${id}` : `m${id}_${c}`) : "markets"));
   if (!open.length) { go("Open a market"); return ctx.reply("No open markets right now. Open one with /bet <yes/no question>.", { reply_markup: kb }); }
   const lines = open.map((r) => {
     const y = Number(r.yesPool) / 1e18, n = Number(r.noPool) / 1e18, pct = y + n ? Math.round((y * 100) / (y + n)) : 50;
     const daily = r.openedAt && new Date(r.openedAt * 1000).toISOString().slice(0, 10) === new Date((r.closeAt - 3600) * 1000).toISOString().slice(0, 10);
     const closesIn = inTime(r.closeAt - now);
-    go(`#${r.id} · YES ${pct}%`, r.id); kb.row();
+    go(`#${r.id} · YES ${pct}%`, r.id, r.chainId ?? 1); kb.row();
     return `🎲 <b>#${r.id}</b> ${esc(marketTitle(r.question, !!daily))}\n   YES ${pct}% · ${(y + n).toFixed(2)} IMD · closes in ${closesIn}`;
   });
   go("All markets");

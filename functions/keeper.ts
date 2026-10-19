@@ -9,7 +9,7 @@ import * as imd from "../packages/imd/src/index";
 import { announceOpened, announceSettled } from "../lib/announce";
 import { getLogsChunked } from "../lib/logs";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { chainList, ACTIVE, type ChainCfg } from "../lib/chains";
 
 export const maxDuration = 300;
 const marketAbi = parseAbi([
@@ -21,7 +21,6 @@ const marketAbi = parseAbi([
   "function stake(uint256 id, bool yes, uint128 amount)",
   "event Opened(uint256 indexed id, address indexed creator, uint64 closeAt, uint64 resolveAfter, bytes body)",
 ]);
-const IMD_TOKEN = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
 // Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase price when the round
 // opens, settled by the swarm on that day's close. The house seeds both sides so every round is live.
 const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) => s.trim()).filter(Boolean);
@@ -39,13 +38,24 @@ const wagerAbi = parseAbi([
   "function resolve(uint256 id)", "function settle(uint256 id)", "function cancel(uint256 id)", "function abandon(uint256 id)",
 ]);
 
-type Act = { contract: "market" | "wager"; id: number; fn: string; tx?: Hex; skipped?: string };
+type Act = { chainId?: number; contract: "market" | "wager"; id: number; fn: string; tx?: Hex; skipped?: string };
 
+// Every chain with contracts gets resolved and settled; daily rounds open only on the active chain.
 export async function runKeeper(): Promise<Act[]> {
-  const transport = http(process.env.ETH_RPC_URL);
-  const pub = createPublicClient({ chain: mainnet, transport });
+  const out: Act[] = [];
+  for (const c of chainList().filter((c) => c.market || c.wager)) {
+    try { out.push(...(await runChain(c)).map((a) => ({ chainId: c.id, ...a }))); }
+    catch (e: any) { out.push({ chainId: c.id, contract: "market", id: 0, fn: "chain", skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
+  }
+  return out;
+}
+
+async function runChain(c: ChainCfg): Promise<Act[]> {
+  const transport = http(c.rpc);
+  const pub = createPublicClient({ chain: c.viem, transport });
   const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as Hex);
-  const wallet = createWalletClient({ account, chain: mainnet, transport });
+  const wallet = createWalletClient({ account, chain: c.viem, transport });
+  const IMD_TOKEN = c.imd;
   const now = BigInt(Math.floor(Date.now() / 1000));
   const acts: Act[] = [];
 
@@ -61,14 +71,14 @@ export async function runKeeper(): Promise<Act[]> {
     }
   }
 
-  const M = process.env.MARKET_ADDRESS as Hex | undefined;
-  if (M && DAILY.length) await ensureDaily(M);
+  const M = c.market;
+  if (M && DAILY.length && c.id === ACTIVE.id) await ensureDaily(M);
 
   async function ensureDaily(M: Hex) {
     const d = new Date(), hour = d.getUTCHours();
     if (hour >= 18) return; // keep at least ~5h of betting per round
     const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    const logs = await getLogsChunked(pub as any, { address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any }, BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300"));
+    const logs = await getLogsChunked(c, { address: M, event: marketAbi.find((x: any) => x.name === "Opened") as any }, c.id === 1 ? BigInt(process.env.MARKET_FROM_BLOCK ?? "26222300") : c.fromBlock);
     const qs = logs.map((l: any) => { try { return JSON.parse(hexToString(l.args.body)).question as string; } catch { return ""; } });
     for (const pair of DAILY) {
       if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
@@ -76,7 +86,7 @@ export async function runKeeper(): Promise<Act[]> {
         const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" }, signal: AbortSignal.timeout(8000) })).json();
         const price = Number(t.price); if (!Number.isFinite(price)) continue;
         const chk = await Promise.race([
-          imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15)),
+          imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15), c.id),
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error("precheck timeout")), 20_000)),
         ]);
         if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
@@ -88,7 +98,7 @@ export async function runKeeper(): Promise<Act[]> {
         const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase())!.topics[1]!);
         if (SEED > 0n) { await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, true, SEED] }); await send({ address: M, abi: marketAbi, functionName: "stake", args: [id, false, SEED] }); }
         acts.push({ contract: "market", id: Number(id), fn: `daily ${pair} > ${Math.round(price)}`, tx: h });
-        await announceOpened(Number(id), chk.request.question, Number(closeAt), true);
+        await announceOpened(Number(id), chk.request.question, Number(closeAt), true, c.id);
       } catch (e: any) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: String(e?.shortMessage ?? e?.message).slice(0, 80) }); }
     }
   }
@@ -106,12 +116,12 @@ export async function runKeeper(): Promise<Act[]> {
         const [after, body] = await pub.readContract({ address: M, abi: marketAbi, functionName: "get", args: [i] });
         let q = ""; try { q = JSON.parse(hexToString(body)).question; } catch {}
         const yes = Number(after.yesPool) / 1e18, no = Number(after.noPool) / 1e18;
-        if (after.phase === 3 || after.phase === 4) await announceSettled(Number(i), q, after.phase === 3 ? "yes" : "no", `Pool ${(yes + no).toFixed(2)} IMD.`);
-        else if (after.phase === 5) await announceSettled(Number(i), q, "void", yes === 0 || no === 0 ? "only one side bet" : "the swarm did not reach a verdict");
+        if (after.phase === 3 || after.phase === 4) await announceSettled(Number(i), q, after.phase === 3 ? "yes" : "no", `Pool ${(yes + no).toFixed(2)} IMD.`, c.id);
+        else if (after.phase === 5) await announceSettled(Number(i), q, "void", yes === 0 || no === 0 ? "only one side bet" : "the swarm did not reach a verdict", c.id);
       }
     }
   }
-  const W = process.env.WAGER_ADDRESS as Hex | undefined;
+  const W = c.wager;
   if (W) {
     const n = await pub.readContract({ address: W, abi: wagerAbi, functionName: "count" });
     for (let i = 1n; i <= n; i++) {

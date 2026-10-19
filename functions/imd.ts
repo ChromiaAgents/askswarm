@@ -3,10 +3,10 @@
 //   POST /api/imd {c,m,q,s,tx}   → verify the tx on chain, then mark the card as asked
 // `s` is an HMAC the bot minted over (chat, message, question); nobody else can point a card at a tx.
 import { createPublicClient, http, decodeFunctionData, hexToString, type Hex } from "viem";
-import { mainnet } from "viem/chains";
+import { CHAINS } from "../lib/chains";
 import * as imd from "../packages/imd/src/index";
 import * as intake from "../packages/imd/src/intake";
-import { verifySig, markAsked } from "../lib/bot";
+import { verifySig, markAsked, ASK_CHAIN } from "../lib/bot";
 
 export const maxDuration = 300;
 const PANEL = Number(process.env.IMD_PANEL_SIZE ?? 15);
@@ -22,11 +22,13 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const a = auth(Object.fromEntries(u.searchParams));
   if (!a) return json({ error: "bad_signature" }, 403);
-  const chk = await imd.check(a.q, PANEL);
-  if (!chk.request || chk.blockers?.length) return json({ error: "blocked", blockers: chk.blockers }, 409);
-  const [action, body, callback, asset, amount] = intake.requestArgs(1, intake.registryBody(1, chk.request));
+  const chainId = ASK_CHAIN === 11155111 ? 1 : ASK_CHAIN;
+  const chk = await imd.check(a.q, PANEL, chainId);
+  if (!chk.request || chk.blockers?.some((b) => b.code !== "chain_unavailable")) return json({ error: "blocked", blockers: chk.blockers }, 409);
+  const [action, body, callback, asset, amount] = intake.requestArgs(chainId, intake.registryBody(chainId, chk.request));
   // With a registry the wallet calls registry.ask(body) and approves the registry; without, Intake directly.
-  return json({ request: chk.request, intake: intake.INTAKE, registry: intake.REGISTRY, asset, amount: amount.toString(), args: { action, body, callback } });
+  const c = CHAINS[chainId];
+  return json({ request: chk.request, chainId, chain: { id: c.id, name: c.name, rpc: c.id === 1 ? "https://ethereum-rpc.publicnode.com" : c.rpc, explorer: c.explorer }, intake: intake.INTAKE, registry: intake.registryFor(chainId), asset, amount: amount.toString(), args: { action, body, callback } });
 }
 
 export async function POST(req: Request) {
@@ -36,11 +38,14 @@ export async function POST(req: Request) {
   const tx = String(p.tx ?? "") as Hex;
   if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return json({ error: "bad_tx" }, 400);
 
-  const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
+  const chainId = Number(p.chainId ?? (ASK_CHAIN === 11155111 ? 1 : ASK_CHAIN));
+  const c = CHAINS[chainId]; if (!c) return json({ error: "bad_chain" }, 400);
+  const pub = createPublicClient({ chain: c.viem, transport: http(c.rpc) });
+  const REG = intake.registryFor(chainId);
   const [t, r] = await Promise.all([pub.getTransaction({ hash: tx }), pub.getTransactionReceipt({ hash: tx })]);
   const to = t.to?.toLowerCase();
   let bodyHex: Hex;
-  if (intake.REGISTRY && to === intake.REGISTRY.toLowerCase()) {
+  if (REG && to === REG.toLowerCase()) {
     const d = decodeFunctionData({ abi: intake.registryAbi, data: t.input });
     if (d.functionName !== "ask") return json({ error: "not_oracle_request" }, 422);
     bodyHex = d.args[0] as Hex;
@@ -53,6 +58,6 @@ export async function POST(req: Request) {
   let body: any; try { body = JSON.parse(hexToString(bodyHex)); } catch { return json({ error: "bad_body" }, 422); }
   if (body.question !== a.q) return json({ error: "question_mismatch" }, 422);
 
-  await markAsked(a.c, a.m, a.q, 1, tx, Number(body.panelSize) || PANEL, ` from ${t.from.slice(0, 6)}…${t.from.slice(-4)}`);
+  await markAsked(a.c, a.m, a.q, chainId as any, tx, Number(body.panelSize) || PANEL, ` from ${t.from.slice(0, 6)}…${t.from.slice(-4)}`);
   return json({ ok: true, tx });
 }

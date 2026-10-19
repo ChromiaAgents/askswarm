@@ -1,27 +1,27 @@
-// Historical event scans. publicnode now refuses blocks older than ~a day without a paid token, and
-// most free RPCs cap getLogs ranges, so history goes through RPCs that serve archive logs for free,
-// with fallback, in 5k-block chunks, one address per call.
-// ponytail: sequential chunks; parallelize or index into KV if the range grows past ~100k blocks.
+// Historical event scans per chain, in chunks the chain's RPCs accept (Ethereum: 5k blocks through
+// archive-capable free RPCs; Robinhood Chain: 2M blocks on its own RPC), with fallback.
+// ponytail: sequential chunks; index into KV if a chain's range grows past a few hundred calls.
 import { createPublicClient, fallback, http, type PublicClient } from "viem";
-import { mainnet } from "viem/chains";
+import type { ChainCfg } from "./chains";
 
-const URLS = (process.env.LOGS_RPC_URLS ?? "https://gateway.tenderly.co/public/mainnet,https://rpc.flashbots.net,https://rpc.mevblocker.io")
-  .split(",").map((s) => s.trim()).filter(Boolean);
-const logsClient = createPublicClient({ chain: mainnet, transport: fallback(URLS.map((u) => http(u, { timeout: 15_000 }))) });
+const clients = new Map<number, PublicClient>();
+export const logsClient = (c: ChainCfg) => {
+  if (!clients.has(c.id)) clients.set(c.id, createPublicClient({ chain: c.viem, transport: fallback(c.logsRpcs.map((u) => http(u, { timeout: 20_000 }))) }) as PublicClient);
+  return clients.get(c.id)!;
+};
 
-export async function getLogsChunked(_pub: PublicClient | any, args: any, fromBlock: bigint, step = 5000n) {
-  const toBlock = await logsClient.getBlockNumber();
+export async function getLogsChunked(c: ChainCfg, args: any, fromBlock = c.fromBlock) {
+  const pub = logsClient(c);
+  const toBlock = await pub.getBlockNumber();
   const addrs: any[] = Array.isArray(args.address) ? args.address : [args.address];
   const out: any[] = [];
   for (const address of addrs) {
-    for (let a = fromBlock; a <= toBlock; a += step) {
-      const b = a + step - 1n > toBlock ? toBlock : a + step - 1n;
-      out.push(...(await logsClient.getLogs({ ...args, address, fromBlock: a, toBlock: b })));
+    for (let a = fromBlock; a <= toBlock; a += c.logStep) {
+      const b = a + c.logStep - 1n > toBlock ? toBlock : a + c.logStep - 1n;
+      out.push(...(await pub.getLogs({ ...args, address, fromBlock: a, toBlock: b })));
     }
   }
-  // Callers fold events in order; merge per-address results back into chain order.
   return out.sort((x, y) => (x.blockNumber === y.blockNumber ? (x.logIndex ?? 0) - (y.logIndex ?? 0) : x.blockNumber < y.blockNumber ? -1 : 1));
 }
 
-/** Block timestamps for charts, through the same archive-capable RPCs. */
-export const getBlockTs = async (blockNumber: bigint) => Number((await logsClient.getBlock({ blockNumber })).timestamp);
+export const getBlockTs = async (c: ChainCfg, blockNumber: bigint) => Number((await logsClient(c).getBlock({ blockNumber })).timestamp);

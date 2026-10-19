@@ -29,8 +29,9 @@
   if (tg) { tg.ready(); tg.expand(); }
   // Same Mini App also routes into the site: m<id> market, w<id> wager, "markets", "answers".
   var route = null, mm;
-  if (param && (mm = param.match(/^m(\d{1,9})$/))) route = "/market?id=" + mm[1];
-  else if (param && (mm = param.match(/^w(\d{1,9})$/))) route = "/wager?id=" + mm[1];
+  // Optional _<chainId> suffix: m3_4663 = Robinhood Chain market 3; bare m3 = Ethereum (old links).
+  if (param && (mm = param.match(/^m(\d{1,9})(?:_(\d{1,7}))?$/))) route = "/market?id=" + mm[1] + "&c=" + (mm[2] || 1);
+  else if (param && (mm = param.match(/^w(\d{1,9})(?:_(\d{1,7}))?$/))) route = "/wager?id=" + mm[1] + "&c=" + (mm[2] || 1);
   else if (param === "markets") route = "/market";
   else if (param === "answers") route = "/answers";
   if (route) { document.getElementById("msg").textContent = "Opening AskSwarm…"; location.replace(route); }

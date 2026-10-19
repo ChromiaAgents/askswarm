@@ -55,12 +55,12 @@
     <img src="/logo.svg" alt="">
     <div>
       <h1>What the <span>swarm</span> knows</h1>
-      <p class="sub">Every answer anyone bought from the IMD swarm through <a href="https://etherscan.io/address/REGISTRY" id="reglink">AskSwarmRegistry</a>. Verified onchain in the callback, stored by question hash, free for any contract or person to read. Ask your own in Telegram: <a href="https://t.me/askswarm_bot">@askswarm_bot</a>.</p>
+      <p class="sub">Every answer anyone bought from the IMD swarm through <a href="https://etherscan.io/address/REGISTRY" id="reglink">AskSwarmRegistry</a> on Robinhood Chain and Ethereum. Verified onchain in the callback, stored by question hash, free for any contract or person to read. Ask your own in Telegram: <a href="https://t.me/askswarm_bot">@askswarm_bot</a>.</p>
     </div>
   </header>
   <div class="stats" id="stats"></div>
   <input id="q" placeholder="Search questions and answers…" autocomplete="off">
-  <div id="list"><div class="card">Loading from Ethereum…</div></div>
+  <div id="list"><div class="card">Loading from Robinhood Chain and Ethereum…</div></div>
   <footer>
     Bet on questions: <a href="/market">markets</a>. Data: <a href="/api/answers">/api/answers</a> (JSON, CORS open). Agents: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a>. Code: <a href="https://github.com/ChromiaAgents/askswarm">github.com/ChromiaAgents/askswarm</a>. Built for the Identity MD hackathon.
   </footer>
@@ -70,6 +70,10 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let rows = [];
+  // Answers live on Robinhood Chain (new) and Ethereum (earlier); each row carries its chainId.
+  const EXP = { 1: "https://etherscan.io", 4663: "https://robinhoodchain.blockscout.com" };
+  const badge = (id) => id === 4663 ? `<span class="chainb rh">Robinhood</span>` : `<span class="chainb eth">Ethereum</span>`;
+  { const st = document.createElement("style"); st.textContent = `.chainb{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;vertical-align:middle}.chainb.rh{background:#CCFF00;color:#1F1A23;border:1.5px solid #1F1A23}.chainb.eth{background:#E6E3F0;color:#3B3550;border:1.5px solid #8C86A6}`; document.head.appendChild(st); }
   const fmt = (ts) => ts ? new Date(ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }) : "";
   function render() {
     const q = $("#q").value.trim().toLowerCase();
@@ -78,12 +82,14 @@
       const tag = r.status === "answered" ? `<span class="tag">verified onchain</span>` : r.status === "pending" ? `<span class="tag wait">panel working</span>` : `<span class="tag warn">${esc(r.status)}${r.reason ? " · " + esc(r.reason) : ""}</span>`;
       const ans = r.status === "answered" ? `<p class="a">${esc(r.answer)}</p>` : r.status === "pending" ? `<p class="a no">…</p>` : `<p class="a no">no consensus</p>`;
       const panel = r.panelSize ? `${r.agreed}/${r.panelSize} agreed (quorum ${r.quorum}) · ${esc(r.answerType)} · valid until ${fmt(r.expiresAt)} · ` : "";
-      return `<div class="card"><p class="q">${esc(r.question)}</p>${ans}<div class="meta">${tag} ${panel}<a href="https://etherscan.io/tx/${r.askTx}">ask tx</a>${r.resultTx ? ` · <a href="https://etherscan.io/tx/${r.resultTx}">callback tx</a>` : ""} · asker ${esc(r.asker.slice(0, 8))}…${r.questionHash ? ` · qh ${esc(r.questionHash.slice(0, 10))}…` : ""}</div></div>`;
+      const ex = EXP[r.chainId || 1];
+      return `<div class="card"><p class="q">${esc(r.question)}</p>${ans}<div class="meta">${badge(r.chainId || 1)} ${tag} ${panel}<a href="${ex}/tx/${r.askTx}">ask tx</a>${r.resultTx ? ` · <a href="${ex}/tx/${r.resultTx}">callback tx</a>` : ""} · asker ${esc(r.asker.slice(0, 8))}…${r.questionHash ? ` · qh ${esc(r.questionHash.slice(0, 10))}…` : ""}</div></div>`;
     }).join("") : `<div class="card">Nothing matches.</div>`;
   }
   fetch("/api/answers?limit=1000").then((r) => r.json()).then((d) => {
     rows = d.rows || [];
-    if (d.registries && d.registries[0]) $("#reglink").href = "https://etherscan.io/address/" + d.registries[0];
+    const reg = (d.registries || []).find((x) => x.chainId === d.active) || (d.registries || [])[0];
+    if (reg) $("#reglink").href = EXP[reg.chainId] + "/address/" + reg.address;
     const v = rows.filter((r) => r.status === "answered").length, n = rows.filter((r) => r.status === "no result" || r.status === "refused").length;
     $("#stats").innerHTML = `<span class="pill p">${rows.length} asked</span><span class="pill g">${v} verified onchain</span><span class="pill y">${n} no consensus</span>`;
     render();

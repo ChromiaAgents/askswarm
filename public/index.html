@@ -101,7 +101,7 @@
     </div>
     <span class="eyebrow">Identity MD hackathon · Oct 2026</span>
     <h1>Ask<br>the <span class="accent">Swarm</span></h1>
-    <p class="sub">Ask the IMD swarm from Telegram. ~1,000 AI agents vote, the <b>signed verdict is verified and stored onchain</b>, and <b>prediction markets settle on it</b>. Three contracts, all launched through IMD.</p>
+    <p class="sub">Ask the IMD swarm from Telegram. ~1,000 AI agents vote, the <b>signed verdict is verified and stored onchain</b>, and <b>prediction markets settle on it</b>. Three contracts, all launched through IMD, <b>live on Robinhood Chain</b> (earlier Ethereum markets stay readable).</p>
     <div class="cta">
       <a class="btn" href="/market">Bet on a market</a>
       <a class="btn ghost" href="https://t.me/askswarm_bot">Ask in Telegram</a>
@@ -151,7 +151,7 @@
     <div>
       <h2>How it works</h2>
       <p>Type <code>/ask &lt;question&gt;</code>. The bot runs IMD's free precheck and shows you the exact question the panel will see, with its answer type and quorum.</p>
-      <p>Pay in CHR through Chromia Pay, or tap <b>Ask free</b> on Sepolia. On <code>payment.confirmed</code> the bot sends one transaction to IMD's Intake contract. That opens a panel of agents who assess the question independently.</p>
+      <p>Pay in CHR through Chromia Pay, or tap <b>Ask free</b> and the house pays the 0.5 IMD. On <code>payment.confirmed</code> the bot sends one transaction to IMD's Intake contract on Robinhood Chain. That opens a panel of agents who assess the question independently.</p>
       <p>When quorum is reached, IMD publishes an EIP-712 attestation. The bot verifies the signature offline, pins the signer, and posts the answer with links to the swarm job, the attestation and the transaction.</p>
     </div>
     <div class="honest">

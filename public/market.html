@@ -142,12 +142,11 @@
 </div>
 <script type="module">
   import { createWalletClient, createPublicClient, custom, http, erc20Abi, parseAbi, parseEther, formatEther, stringToHex, hexToString } from "https://esm.sh/viem@2.57.7";
-  import { mainnet } from "https://esm.sh/viem@2.57.7/chains";
+  import { chainMap, viemChain, pubFor, switchTo, tx as txLink, addr as addrLink, badge } from "/chain.js";
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const P = new URLSearchParams(location.search);
-  const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
   const mAbi = parseAbi([
     "function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)",
     "function stake(uint256 id, bool yes, uint128 amount)", "function resolve(uint256 id)", "function settle(uint256 id)", "function claim(uint256 id) returns (uint256)",
@@ -158,9 +157,12 @@
   ]);
   const regAbi = parseAbi(["function price() view returns (uint256)", "function get(bytes32) view returns ((address asker,uint64 askedAt,uint8 status) k,(bytes32 questionHash,bytes answer,bytes32 answerHash,uint8 answerType,uint16 panelSize,uint16 quorum,uint16 agreed,uint64 issuedAt,uint64 expiresAt,bool verified) a)"]);
   const PH = ["none", "open", "asked", "yes", "no", "void"];
-  const pub = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
   const data = await fetch("/api/markets").then((r) => r.json()).catch(() => ({}));
-  const M = data.market, REG = data.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
+  // One page, one chain: a market link carries ?c=<chainId> (no c = Ethereum, for old links);
+  // the list and the "new market" form use the active chain (Robinhood Chain).
+  const CH = chainMap(data.chains), ACTIVE = Number(data.active || 1);
+  const C = CH[P.get("id") ? Number(P.get("c") || 1) : ACTIVE] || CH[1];
+  const pub = pubFor(C), IMD = C.imd, M = C.market, REG = C.registry || "0x53e1e2f33f05086086adf618ca92c3cb0ab111cd";
   // Local time in the viewer's own timezone (Telegram's webview and browsers both know it).
   const fmt = (ts) => new Date(Number(ts) * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   const imd = (v) => { const n = Number(formatEther(BigInt(v))); return n.toLocaleString(undefined, { maximumFractionDigits: n > 0 && n < 0.01 ? 4 : 2 }); };
@@ -194,9 +196,9 @@
       box.scrollIntoView({ behavior: "smooth", block: "start" });
       throw new Error("Open this page in your wallet app to sign (options above).");
     }
-    const w = createWalletClient({ chain: mainnet, transport: custom(window.ethereum) });
+    const w = createWalletClient({ chain: viemChain(C), transport: custom(window.ethereum) });
     const [account] = await w.requestAddresses();
-    if ((await w.getChainId()) !== 1) await w.switchChain({ id: 1 });
+    await switchTo(w, C);
     return { w, account };
   }
   async function allow(w, account, amount, log) {
@@ -207,7 +209,7 @@
   }
   const send = async (w, account, fn, args, log) => { log("Confirm in your wallet…"); const h = await w.writeContract({ account, address: M, abi: mAbi, functionName: fn, args }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
 
-  if (data.stats) $("#stats").innerHTML = `<span class="pill">${data.stats.markets} markets</span><span class="pill">${data.stats.traders} traders</span><span class="pill">${imd(data.stats.volume)} IMD staked</span><span class="pill">${imd(data.stats.fees)} IMD fees</span>`;
+  if (data.stats) $("#stats").innerHTML = `<span class="pill">⛓ ${esc(CH[ACTIVE].name)}</span><span class="pill">${data.stats.markets} markets</span><span class="pill">${data.stats.traders} traders</span><span class="pill">${imd(data.stats.volume)} IMD staked</span><span class="pill">${imd(data.stats.fees)} IMD fees</span>`;
 
   // ---- chart: HIP-4 style LED line. Price mode for questions that name a Coinbase pair and a
   // threshold ("ETH-USD … above 3,000"); Chance mode (Yes % from the pools) for every market.
@@ -324,7 +326,7 @@
     const [m, bodyHex] = await pub.readContract({ address: M, abi: mAbi, functionName: "get", args: [BigInt(id)] });
     let body = {}; try { body = JSON.parse(hexToString(bodyHex)); } catch {}
     const ph = PH[m.phase], now = Date.now() / 1000;
-    const row = (data.rows || []).find((r) => String(r.id) === String(id)) || { history: [], trades: [], claims: [] };
+    const row = (data.rows || []).find((r) => String(r.id) === String(id) && Number(r.chainId || 1) === C.id) || { history: [], trades: [], claims: [] };
     const T = title({ question: body.question, openedAt: row.openedAt });
     let swarm = "";
     if (m.requestId !== "0x" + "0".repeat(64)) {
@@ -341,7 +343,7 @@
       : !canStake ? `<div class="res wait"><b>Betting closed</b><span>The swarm answers after ${fmt(m.resolveAfter)}, paid out automatically</span></div>` : "";
     const k1 = mults(m.yesPool, m.noPool, 0.01);
     $("#view").innerHTML = `<div class="mk">
-      <div class="mmeta"><span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets${row.voidRiskBps != null ? ` · ${row.voidRiskBps < 1000 ? "🟢" : row.voidRiskBps < 2500 ? "🟡" : "🔴"} refund risk ${Math.round(row.voidRiskBps / 100)}%` : ""}</span></div>
+      <div class="mmeta">${badge(C)} <span class="tag ${ph}">${canStake ? "live" : ph === "yes" || ph === "no" ? "resolved" : ph === "void" ? "void" : "closed"}</span><span>${leftTxt} · ${imd(m.yesPool + m.noPool)} IMD pool · ${row.trades.length} bets${row.voidRiskBps != null ? ` · ${row.voidRiskBps < 1000 ? "🟢" : row.voidRiskBps < 2500 ? "🟡" : "🔴"} refund risk ${Math.round(row.voidRiskBps / 100)}%` : ""}</span></div>
       <h2 class="mt">${esc(T)}</h2>
       ${status}
       ${canStake ? `<div class="sides"><button class="side y on" data-s="1"><small>YES</small><b>${pct}%</b><span id="py">pays ${fx(k1.yes)}</span></button><button class="side n" data-s="0"><small>NO</small><b>${100 - pct}%</b><span id="pn">pays ${fx(k1.no)}</span></button></div>
@@ -355,12 +357,12 @@
       <details class="more"><summary>How it settles</summary><div class="rules"></div></details>
     </div>`;
     chartBox(m, row, body);
-    $("#trades").innerHTML = row.trades.length ? row.trades.slice().reverse().map((x) => `<div class="trow"><span>${x.user.slice(0, 6)}…${x.user.slice(-4)}</span><b class="${x.side === "yes" ? "ty" : "tn"}">${x.side.toUpperCase()}</b><span>${imd(x.amount)} IMD</span><a href="https://etherscan.io/tx/${x.tx}">${ago(x.t)}</a></div>`).join("") : `<p class="meta">No bets yet. Be first.</p>`;
+    $("#trades").innerHTML = row.trades.length ? row.trades.slice().reverse().map((x) => `<div class="trow"><span>${x.user.slice(0, 6)}…${x.user.slice(-4)}</span><b class="${x.side === "yes" ? "ty" : "tn"}">${x.side.toUpperCase()}</b><span>${imd(x.amount)} IMD</span><a href="${txLink(C, x.tx)}">${ago(x.t)}</a></div>`).join("") : `<p class="meta">No bets yet. Be first.</p>`;
     document.querySelector(".rules").innerHTML = `<p>The swarm is asked exactly: <i>“${esc(body.question)}”</i></p>
       <p>${body.panelSize ?? 15} AI agents answer; a clear majority (at least 7) must agree, and AskSwarmRegistry verifies their signature onchain. YES wins on Yes, NO on No. Split vote, one-sided market or no answer within 3 days: everyone is refunded.</p>
       <p>Winners split the losing side. 2% of it goes half to the market's creator, half to fund free asks.</p>
       ${row.voidRiskBps != null ? `<p>Refund risk ${Math.round(row.voidRiskBps / 100)}%: the chance the swarm splits and everyone is refunded, from a model trained on 7,800 past IMD oracle requests (<a href="https://huggingface.co/datasets/evalengine/imd-oracle-outcomes">Eval Engine dataset</a>). Every settled market is written back into that dataset.</p>` : ""}
-      <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} · <a href="https://etherscan.io/address/${M}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id)}" target="_blank">share on X</a></p>`;
+      <p class="meta">Betting closes ${fmt(m.closeAt)} · swarm asked after ${fmt(m.resolveAfter)}<br>market #${id} on ${C.name} · <a href="${addrLink(C, M)}">contract</a> · <a href="https://x.com/intent/post?text=${encodeURIComponent(`${T} 🎲 YES ${pct}% on AskSwarm, settled by 1,000 AI agents from the IMD swarm.`)}&url=${encodeURIComponent(location.origin + "/market?id=" + id + "&c=" + C.id)}" target="_blank">share on X</a></p>`;
 
     const log = logger($("#vlog"));
     const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
@@ -405,7 +407,7 @@
       const h = await send(w, account, "open", [stringToHex(JSON.stringify(draft)), BigInt(closeAt), BigInt(after)], log);
       const rc = await pub.getTransactionReceipt({ hash: h });
       const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase()).topics[1]);
-      location.href = "?id=" + id;
+      location.href = "?id=" + id + "&c=" + C.id;
     } catch (e) { log(e?.shortMessage || e?.message || String(e), "err"); $("#openBtn").disabled = false; }
   };
 
@@ -441,14 +443,14 @@
   const ptb = [...pts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (!P.get("id") && (act.length || lb.length)) {
     const g = document.createElement("div"); g.className = "grid2";
-    g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}">#${x.r.id}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
+    g.innerHTML = `<div class="card"><h4>Live activity</h4><div class="feed">${act.map((x) => `<div><span>${x.user.slice(0, 6)}… ${x.k === "bet" ? `bet <b class="${x.side === "yes" ? "y" : "n"}">${x.side.toUpperCase()}</b>` : "<b class=\"y\">won</b>"} ${imd(x.amount)} IMD · <a href="?id=${x.r.id}&c=${x.r.chainId || 1}">#${x.r.id}</a></span><span>${ago(x.t)}</span></div>`).join("")}</div></div>
       <div class="card"><h4>Leaderboard <span class="lbt" style="float:right;font-weight:400;font-size:13px"><a href="#" data-l="pts">points</a> · <a href="#" data-l="pnl">profit</a></span></h4>
         <div class="lb" id="lb-pts">${ptb.map(([u, p], i) => `<div><span>${i + 1}. ${u.slice(0, 6)}…${u.slice(-4)}</span><span>${Math.round(p).toLocaleString()} pts</span></div>`).join("")}<p class="meta" style="margin:6px 0 0">Season 1 points from onchain activity: bets, wins, markets you open, answers you buy. Points only, no token promised.</p></div>
         <div class="lb" id="lb-pnl" hidden>${lb.map((x, i) => `<div title="volume ${x.vol.toFixed(2)} IMD"><span>${i + 1}. ${x.u.slice(0, 6)}…${x.u.slice(-4)}</span><span style="color:${x.pnl >= 0 ? "#2e8b2b" : "#c2185b"}">${x.pnl >= 0 ? "+" : ""}${x.pnl.toFixed(3)} IMD</span></div>`).join("")}</div></div>`;
     $("#list").before(g);
     g.querySelectorAll(".lbt a").forEach((a) => (a.onclick = (e) => { e.preventDefault(); $("#lb-pts").hidden = a.dataset.l !== "pts"; $("#lb-pnl").hidden = a.dataset.l !== "pnl"; }));
   }
-  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}"><div class="card">${st.tag} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool, 0.01); return ` · <span class="mult">YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
+  $("#list").innerHTML = rows.map((r) => { const st = status(r); return `<a class="cardlink" href="?id=${r.id}&c=${r.chainId || 1}"><div class="card">${st.tag} ${badge(CH[r.chainId || 1])} <span class="meta">#${r.id} · ${r.stakers} traders · ${imd(BigInt(r.yesPool) + BigInt(r.noPool))} IMD</span><p class="q">${esc(title(r))}</p>${bar(r.yesPool, r.noPool, ["yes", "no", "void"].includes(r.phase))}<div class="meta">${st.line}${r.phase === "open" && Date.now() / 1000 < r.closeAt ? (() => { const k = mults(r.yesPool, r.noPool, 0.01); return ` · <span class="mult">YES pays ${fx(k.yes)} · NO pays ${fx(k.no)}</span>`; })() : ""}</div></div></a>`; }).join("");
   if (!M) $("#view").innerHTML = `<div class="card">The market contract is being launched through IMD. Check back shortly.</div>`;
   else if (P.get("id")) {
     // Single market: straight to the market, especially on a phone inside Telegram.

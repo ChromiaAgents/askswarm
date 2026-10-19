@@ -82,11 +82,11 @@ export async function checkAction(action: string, input: Record<string, unknown>
   return j<any>(res);
 }
 
-export async function check(question: string, panelSize: number): Promise<CheckResult> {
+export async function check(question: string, panelSize: number, chainId?: number): Promise<CheckResult> {
   // server rejects `quorum` here and derives it (15 -> 11). Limits seen live: panelSize 5..100.
   const res = await fetch(`${IMD_API}/requests/check`, {
     method: "POST", headers: json,
-    body: JSON.stringify({ action: "oracle.request", input: { question, panelSize } }),
+    body: JSON.stringify({ action: "oracle.request", input: chainId ? { question, panelSize, chainId } : { question, panelSize } }),
   });
   return j<CheckResult>(res);
 }

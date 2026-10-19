@@ -1,10 +1,9 @@
 // End-to-end smoke test of everything live. Read-only except where noted.
 //   bun scripts/smoke.ts            pages, APIs, auth guards, contracts, bot webhook, dataset
 import { createPublicClient, http, parseAbi, erc20Abi, formatEther, type Hex } from "viem";
-import { mainnet } from "viem/chains";
+import { chainList, ACTIVE } from "../lib/chains";
 
 const BASE = process.env.PUBLIC_URL ?? "https://askswarm-nine.vercel.app";
-const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as Hex;
 const HOUSE = "0x571E17B13D8F6492Bbc372A160520B20BfdA320c" as Hex;
 const results: { name: string; ok: boolean; detail: string }[] = [];
 const check = async (name: string, fn: () => Promise<string | true>) => {
@@ -15,12 +14,12 @@ const must = (c: any, msg: string) => { if (!c) throw new Error(msg); };
 const get = async (path: string, init?: RequestInit) => fetch(BASE + path, { ...init, signal: AbortSignal.timeout(30_000) });
 
 // ---- pages
-for (const p of ["/", "/answers", "/market", "/market?id=1", "/market?id=3", "/wager", "/wager?id=1", "/skill.md", "/llms.txt", "/pay?cs=x", "/imd", "/nav.js", "/logo.svg", "/og.png"])
+for (const p of ["/", "/answers", "/market", "/market?id=1", "/market?id=3&c=1", "/wager", "/wager?id=1&c=1", "/skill.md", "/llms.txt", "/pay?cs=x", "/imd", "/nav.js", "/chain.js", "/logo.svg", "/og.png"])
   await check(`page ${p}`, async () => { const r = await get(p); must(r.ok, `HTTP ${r.status}`); return `${r.status}`; });
 
 // ---- APIs
-await check("api/answers", async () => { const j = await (await get("/api/answers")).json(); must(j.count >= 12 && j.verified >= 10, `count ${j.count} verified ${j.verified}`); return `${j.count} answers, ${j.verified} verified, ${j.registries.length} registries`; });
-await check("api/markets", async () => { const j = await (await get("/api/markets")).json(); must(j.rows.length >= 4, `rows ${j.rows.length}`); must(j.rows.every((r: any) => Array.isArray(r.history) && Array.isArray(r.trades)), "missing history/trades"); return `${j.stats.markets} markets, ${j.stats.traders} traders, ${formatEther(BigInt(j.stats.volume))} IMD volume, ${formatEther(BigInt(j.stats.fees))} IMD fees`; });
+await check("api/answers", async () => { const j = await (await get("/api/answers")).json(); must(j.count >= 12 && j.verified >= 10, `count ${j.count} verified ${j.verified}`); const per = [...new Set(j.rows.map((r: any) => r.chainId))].join("+"); return `${j.count} answers, ${j.verified} verified, ${j.registries.length} registries, chains ${per}, active ${j.active}`; });
+await check("api/markets", async () => { const j = await (await get("/api/markets")).json(); must(j.rows.length >= 4, `rows ${j.rows.length}`); must(j.rows.every((r: any) => Array.isArray(r.history) && Array.isArray(r.trades)), "missing history/trades"); must(Array.isArray(j.chains) && j.active, "no chains/active"); return `active ${j.active} · ${j.stats.markets} markets, ${j.stats.traders} traders, ${formatEther(BigInt(j.stats.volume))} IMD volume, ${formatEther(BigInt(j.stats.fees))} IMD fees`; });
 await check("api/wagers", async () => { const j = await (await get("/api/wagers")).json(); must(j.rows.length >= 1 && j.rows.some((r: any) => r.state === "paid"), "no paid wager"); return `${j.rows.length} wagers`; });
 await check("api/wagers draft yes/no", async () => { const r = await get("/api/wagers?draft=" + encodeURIComponent("Did Argentina win the 2022 FIFA World Cup?")); const j = await r.json(); must(r.ok && j.request?.answerType === "bool", JSON.stringify(j).slice(0, 120)); return "bool body"; });
 await check("api/wagers draft rejects non yes/no", async () => { const r = await get("/api/wagers?draft=" + encodeURIComponent("In what year was Airbnb founded? Answer with the four-digit year only.")); must(r.status === 409, `HTTP ${r.status}`); return "409"; });
@@ -37,24 +36,25 @@ await check("guard api/cpay-webhook unsigned", async () => { const r = await get
 // ---- keeper with secret (no-op or real work)
 await check("keeper run", async () => { const r = await get("/api/keeper", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }); const j = await r.json(); must(r.ok && Array.isArray(j.acts), JSON.stringify(j).slice(0, 120)); return `${j.acts.length} actions`; });
 
-// ---- contracts
-const pub = createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL) });
-await check("registry price + recent answer", async () => {
-  const reg = process.env.REGISTRY_ADDRESS as Hex;
-  const p = await pub.readContract({ address: reg, abi: parseAbi(["function price() view returns (uint256)"]), functionName: "price" });
-  must(p === 500000000000000000n, `price ${p}`); return "0.5 IMD";
-});
-await check("market + wager counts", async () => {
-  const c = parseAbi(["function count() view returns (uint256)"]);
-  const m = await pub.readContract({ address: process.env.MARKET_ADDRESS as Hex, abi: c, functionName: "count" });
-  const w = await pub.readContract({ address: process.env.WAGER_ADDRESS as Hex, abi: c, functionName: "count" });
-  return `${m} markets, ${w} wagers`;
-});
-await check("house wallet runway", async () => {
-  const [i, e] = await Promise.all([pub.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [HOUSE] }), pub.getBalance({ address: HOUSE })]);
-  must(i >= 2n * 10n ** 18n && e >= 3n * 10n ** 15n, `low: ${formatEther(i)} IMD ${formatEther(e)} ETH`);
-  return `${Number(formatEther(i)).toFixed(2)} IMD, ${Number(formatEther(e)).toFixed(4)} ETH`;
-});
+// ---- contracts, on every configured chain; runway on the active one
+for (const ch of chainList().filter((c) => c.registries.length)) {
+  const pub = createPublicClient({ chain: ch.viem, transport: http(ch.rpc) });
+  await check(`${ch.short} registry price`, async () => {
+    const p = await pub.readContract({ address: ch.registries[0], abi: parseAbi(["function price() view returns (uint256)"]), functionName: "price" });
+    must(p === 500000000000000000n, `price ${p}`); return `0.5 IMD at ${ch.registries[0]}`;
+  });
+  if (ch.market && ch.wager) await check(`${ch.short} market + wager counts`, async () => {
+    const c = parseAbi(["function count() view returns (uint256)"]);
+    const m = await pub.readContract({ address: ch.market!, abi: c, functionName: "count" });
+    const w = await pub.readContract({ address: ch.wager!, abi: c, functionName: "count" });
+    return `${m} markets, ${w} wagers`;
+  });
+  if (ch.id === ACTIVE.id) await check(`${ch.short} house wallet runway`, async () => {
+    const [i, e] = await Promise.all([pub.readContract({ address: ch.imd, abi: erc20Abi, functionName: "balanceOf", args: [HOUSE] }), pub.getBalance({ address: HOUSE })]);
+    must(i >= 2n * 10n ** 18n && e >= (ch.id === 1 ? 3n * 10n ** 15n : 5n * 10n ** 14n), `low: ${formatEther(i)} IMD ${formatEther(e)} ETH`);
+    return `${Number(formatEther(i)).toFixed(2)} IMD, ${Number(formatEther(e)).toFixed(4)} ETH`;
+  });
+}
 
 // ---- bot
 const TG = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
