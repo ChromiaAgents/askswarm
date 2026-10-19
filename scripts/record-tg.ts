@@ -11,7 +11,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { ACTIVE } from "../lib/chains";
 
 const MARKET = process.argv[2] ?? "1";
-const QUESTION = process.argv[3] ?? "Did Argentina win the 2022 FIFA World Cup?";
+// A question the swarm already attested, so the bot answers it free and instantly with the signed verdict.
+const QUESTION = process.argv[3] ?? "Bitcoin's total supply is capped at 21 million coins. Answer true or false.";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 mkdirSync("docs/demo", { recursive: true });
 
@@ -87,6 +88,8 @@ async function appFrame(): Promise<Frame> {
 }
 
 await closeApp(); // a Mini App left open would otherwise be restored over the chat
+// Telegram's narrow layout can leave the page slid sideways onto the chat list; keep it on the chat.
+await p.evaluate(() => setInterval(() => { for (const e of [document.body, document.documentElement]) if (e.scrollLeft) e.scrollLeft = 0; }, 100));
 await wait(1500);
 const rec = await p.screencast({ path: "docs/demo/tg.webm" as `${string}.webm` });
 try {
@@ -133,7 +136,7 @@ try {
   await send(`/ask ${QUESTION}`);
   await p.waitForFunction((q) => [...document.querySelectorAll(".bubble.is-in")].some((e) => (e.textContent ?? "").includes("panel") && (e.textContent ?? "").includes(q.slice(4, 30))), { timeout: 60_000, polling: 500 }, QUESTION).catch(() => {});
   mark("answer");
-  await wait(7000);
+  await wait(8000);
   mark("end");
 } finally {
   await rec.stop();
