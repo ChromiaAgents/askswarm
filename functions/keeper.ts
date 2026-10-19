@@ -71,9 +71,12 @@ export async function runKeeper(): Promise<Act[]> {
     for (const pair of DAILY) {
       if (qs.some((q) => q.startsWith(dailyPrefix(pair, day)))) continue;
       try {
-        const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" } })).json();
+        const t = await (await fetch(`https://api.exchange.coinbase.com/products/${pair}/ticker`, { headers: { "user-agent": "askswarm" }, signal: AbortSignal.timeout(8000) })).json();
         const price = Number(t.price); if (!Number.isFinite(price)) continue;
-        const chk = await imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15));
+        const chk = await Promise.race([
+          imd.check(dailyQuestion(pair, day, price), Number(process.env.IMD_PANEL_SIZE ?? 15)),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error("precheck timeout")), 20_000)),
+        ]);
         if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
         const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
         const send = async (r: any) => { const h = await wallet.writeContract({ account, ...r }); await pub.waitForTransactionReceipt({ hash: h }); return h; };
