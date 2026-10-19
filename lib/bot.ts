@@ -292,7 +292,8 @@ bot.command("markets", async (ctx) => {
   let rows: any[] = [];
   try { rows = (await (await fetch(`${BASE_URL}/api/markets`, { signal: AbortSignal.timeout(8000) })).json()).rows ?? []; } catch {}
   const now = Date.now() / 1000;
-  const open = rows.filter((r) => r.phase === "open" && now < r.closeAt).slice(0, 6);
+  // New bets go to the active chain only; older chains' markets stay readable on the site.
+  const open = rows.filter((r) => r.phase === "open" && now < r.closeAt && (r.chainId ?? 1) === ACTIVE.id).slice(0, 6);
   const kb = new InlineKeyboard();
   const priv = ctx.chat.type === "private";
   const go = (label: string, id?: string, c = 1) => priv ? kb.webApp(label, `${BASE_URL}/market${id ? `?id=${id}&c=${c}` : ""}`) : kb.url(label, miniAppLink(id ? (c === 1 ? `m${id}` : `m${id}_${c}`) : "markets"));
@@ -305,7 +306,7 @@ bot.command("markets", async (ctx) => {
     return `🎲 <b>#${r.id}</b> ${esc(marketTitle(r.question, !!daily))}\n   YES ${pct}% · ${(y + n).toFixed(2)} IMD · closes in ${closesIn}`;
   });
   go("All markets");
-  return ctx.reply(`<b>Open markets</b>, settled by the IMD swarm:\n\n${lines.join("\n\n")}`, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
+  return ctx.reply(`<b>Open markets</b> on ${esc(ACTIVE.name)}, settled by the IMD swarm:\n\n${lines.join("\n\n")}`, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
 });
 
 bot.command("id", (ctx) => ctx.reply(`user ${ctx.from?.id}\nchat ${ctx.chat.id}`));
