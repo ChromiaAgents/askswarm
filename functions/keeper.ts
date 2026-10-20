@@ -24,11 +24,13 @@ const marketAbi = parseAbi([
 ]);
 // Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase spot price when the round
 // opens, settled by the swarm on that day's close. The house seeds both sides so every round is live.
-const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) => s.trim()).filter(Boolean);
+// One round a day keeps the swarm fee at 0.5 IMD/day; DAILY_PAIRS=ETH-USD,BTC-USD adds BTC back.
+const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD").split(",").map((s) => s.trim()).filter(Boolean);
 // Precheck codes that do not mean "bad question": the future (asked after the close) and IMD's own
 // infra being briefly down (the onchain request is recorded and answered when it recovers).
 const SOFT = new Set(["not_answerable", "chain_unavailable"]);
-const SEED = parseEther(process.env.DAILY_SEED_IMD ?? "0.1");
+// Just enough on each side that the round shows odds and isn't one-sided (which refunds everyone).
+const SEED = parseEther(process.env.DAILY_SEED_IMD ?? "0.01");
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 // IMD's intake refuses Coinbase-price wording as "not answerable from public sources" even for past
 // days (both 19 Oct rounds voided that way); it accepts a CoinMarketCap historical close named with

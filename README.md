@@ -276,10 +276,13 @@ Use it from Telegram with `/bet <question>`, or at [/wager](https://askswarm.eva
 `api/keeper` runs every 10 minutes (Vercel cron). SwarmMarket only accepts `resolve` within an hour
 of a market's deadline, so the keeper calls it on time, settles anything the swarm has answered,
 unwinds what can no longer resolve, and does the same for wagers. Each day before 18:00 UTC it also
-opens one round per pair in `DAILY_PAIRS` (default ETH-USD, BTC-USD): the question is "Was the
-Coinbase ETH-USD daily close on <today> above <price at open>?", betting closes at 23:00 UTC, the
-swarm is asked at 00:15 UTC, and the house seeds `DAILY_SEED_IMD` (0.1) on each side so the round
-is never one-sided. Every call it makes is permissionless; anyone can run the same loop.
+opens one round per pair in `DAILY_PAIRS` (default ETH-USD only, so the swarm fee is 0.5 IMD a day):
+the question is "Was the closing price of Ethereum (ETH) on <today>, as listed on CoinMarketCap
+historical data, above <price at open>?" (IMD's intake refuses Coinbase-close wording), betting
+closes at 23:00 UTC, the swarm is asked at 02:00 UTC, and the house seeds `DAILY_SEED_IMD` (0.01)
+on each side so the round is never one-sided. It also claims the house's refunds and winnings.
+Anyone can open their own market; the creator escrows that market's swarm fee. Every call the
+keeper makes is permissionless; anyone can run the same loop.
 
 ### Telegram as the front door
 
