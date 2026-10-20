@@ -4,9 +4,9 @@
 
 AskSwarm turns the [IMD](https://imd.fun) oracle into something people and contracts use.
 
-- **Ask** in Telegram (`/ask`), on the web, or as an agent ([skill.md](https://askswarm-nine.vercel.app/skill.md)). 6.7k past answers are free; a fresh one costs 160 CHR via Chromia Pay or 0.5 IMD from your own wallet.
-- **AskSwarmRegistry** pays the swarm, verifies its EIP-712 attestation onchain, and stores every answer by question hash: a public, verified memory any contract can read. Browse it at [/answers](https://askswarm-nine.vercel.app/answers).
-- **SwarmMarket** settles yes/no prediction markets on those answers (`/bet`, [/market](https://askswarm-nine.vercel.app/market)). Winners split the losing side; 2% of it goes half to the market's creator, half to fund free asks.
+- **Ask** in Telegram (`/ask`), on the web, or as an agent ([skill.md](https://askswarm.evalengine.ai/skill.md)). 6.7k past answers are free; a fresh one costs 160 CHR via Chromia Pay or 0.5 IMD from your own wallet.
+- **AskSwarmRegistry** pays the swarm, verifies its EIP-712 attestation onchain, and stores every answer by question hash: a public, verified memory any contract can read. Browse it at [/answers](https://askswarm.evalengine.ai/answers).
+- **SwarmMarket** settles yes/no prediction markets on those answers (`/bet`, [/market](https://askswarm.evalengine.ai/market)). Winners split the losing side; 2% of it goes half to the market's creator, half to fund free asks.
 - **Daily rounds:** a keeper opens "ETH up or down today" and "BTC up or down today" every day at the Coinbase price, seeds both sides, asks the swarm after the daily close and pays out. No human in the loop.
 - **SwarmWager** does the same for one-on-one bets.
 - All three contracts were audited, adapted and deployed by the IMD swarm itself through IMD launches. Every answer flows back into the open [Eval Engine dataset](https://huggingface.co/datasets/evalengine/imd-oracle-outcomes) that the split-risk model learns from.
@@ -254,7 +254,7 @@ notes: [contracts/ADAPTATION.md](contracts/ADAPTATION.md), [contracts/ADAPTATION
 | Ethereum mainnet, first (launch #2088), 10 answers on record | [`0x3fc72adfed89284e4f3f378646a5338f2f1e14ea`](https://etherscan.io/address/0x3fc72adfed89284e4f3f378646a5338f2f1e14ea) |
 | Sepolia (self-deployed, pre-audit build) | `0x1d57A9aa2479fd115E3a1F545Ed5B8660548b900` |
 
-The explorer at [/answers](https://askswarm-nine.vercel.app/answers) reads every registry on both chains, with a chain badge on each answer.
+The explorer at [/answers](https://askswarm.evalengine.ai/answers) reads every registry on both chains, with a chain badge on each answer.
 
 ### Built on the registry: SwarmWager
 
@@ -267,7 +267,7 @@ panel agreed on. A split panel, a refusal, a wrong answer type or no answer with
 both stakes. Nobody, the creator included, can pick the outcome, and the contract never touches a
 signature or a price feed: the registry is its only source of truth.
 
-Use it from Telegram with `/bet <question>`, or at [/wager](https://askswarm-nine.vercel.app/wager).
+Use it from Telegram with `/bet <question>`, or at [/wager](https://askswarm.evalengine.ai/wager).
 15 fork tests in `test/SwarmWager.t.sol`. Launched through IMD like the registry; brief in
 `contracts/LAUNCH-WAGER.md`.
 

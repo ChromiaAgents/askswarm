@@ -3,7 +3,7 @@
 import { createPublicClient, http, parseAbi, erc20Abi, formatEther, type Hex } from "viem";
 import { chainList, ACTIVE } from "../lib/chains";
 
-const BASE = process.env.PUBLIC_URL ?? "https://askswarm-nine.vercel.app";
+const BASE = process.env.PUBLIC_URL ?? "https://askswarm.evalengine.ai";
 const HOUSE = "0x571E17B13D8F6492Bbc372A160520B20BfdA320c" as Hex;
 const results: { name: string; ok: boolean; detail: string }[] = [];
 const check = async (name: string, fn: () => Promise<string | true>) => {

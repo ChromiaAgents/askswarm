@@ -5,7 +5,7 @@
 // (0.5 IMD from the house wallet) and edit the card when the answer lands.
 import { createHmac } from "node:crypto";
 const chat = Number(process.argv[2]);
-const BASE = "https://askswarm-nine.vercel.app", TG = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+const BASE = "https://askswarm.evalengine.ai", TG = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 const upd = (text: string, id: number) => ({ update_id: Date.now() % 1e9 + id, message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: chat, type: "private" }, from: { id: chat, is_bot: false, first_name: "Test" }, text, entities: [{ type: "bot_command", offset: 0, length: text.split(" ")[0].length }] } });
 for (const [i, t] of ["/start", "/markets"].entries()) {
   const r = await fetch(`${BASE}/api/telegram`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify(upd(t, i)) });

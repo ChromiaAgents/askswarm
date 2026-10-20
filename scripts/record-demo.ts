@@ -8,7 +8,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { ACTIVE } from "../lib/chains";
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const BASE = "https://askswarm-nine.vercel.app";
+const BASE = "https://askswarm.evalengine.ai";
 const MARKET = process.argv[2] ?? "3";
 const account = privateKeyToAccount(process.env.DEMO_PK as Hex);
 const transport = http(ACTIVE.rpc);

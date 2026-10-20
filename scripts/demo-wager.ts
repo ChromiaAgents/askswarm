@@ -41,5 +41,5 @@ for (let i = 0; i < 60; i++) {
 }
 const [w] = await pub.readContract({ address: WAGER, abi, functionName: "get", args: [id] });
 log("final", { state: ["none", "open", "matched", "asked", "paid", "refunded"][w.state], winner: w.winner, requestId: w.requestId });
-console.log(`https://askswarm-nine.vercel.app/wager?id=${id}`);
+console.log(`https://askswarm.evalengine.ai/wager?id=${id}`);
 process.exit(0);

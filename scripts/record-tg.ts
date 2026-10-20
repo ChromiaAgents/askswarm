@@ -84,7 +84,7 @@ async function closeApp() {
   }
 }
 async function appFrame(): Promise<Frame> {
-  for (let i = 0; i < 60; i++) { const f = p.frames().find((x) => x.url().includes("askswarm-nine.vercel.app")); if (f) return f; await wait(500); }
+  for (let i = 0; i < 60; i++) { const f = p.frames().find((x) => x.url().includes("askswarm.evalengine.ai")); if (f) return f; await wait(500); }
   throw new Error("Mini App did not open");
 }
 

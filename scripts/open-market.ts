@@ -17,6 +17,6 @@ await send({ address: IMD, abi: erc20Abi, functionName: "approve", args: [M, 500
 const h = await send({ address: M, abi: parseAbi(["function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)"]), functionName: "open", args: [stringToHex(JSON.stringify(chk.request)), BigInt(Date.parse(closeIso) / 1000), BigInt(Date.parse(afterIso) / 1000)] });
 const rc = await pub.getTransactionReceipt({ hash: h });
 const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase())!.topics[1]!);
-console.log(`opened #${id} ${h}\nhttps://askswarm-nine.vercel.app/market?id=${id}&c=${ACTIVE.id}`);
+console.log(`opened #${id} ${h}\nhttps://askswarm.evalengine.ai/market?id=${id}&c=${ACTIVE.id}`);
 if (seed) console.log("seeded NO", await send({ address: M, abi: parseAbi(["function stake(uint256 id, bool yes, uint128 amount)"]), functionName: "stake", args: [id, false, seed] }));
 process.exit(0);

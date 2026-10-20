@@ -27,5 +27,5 @@ const id = BigInt(rc.logs.find((l) => l.address.toLowerCase() === M.toLowerCase(
 console.log("opened", id, h);
 console.log("yes", await send(wa, { address: M, abi, functionName: "stake", args: [id, true, yes] }));
 console.log("no", await send(wb, { address: M, abi, functionName: "stake", args: [id, false, no] }));
-console.log(`https://askswarm-nine.vercel.app/market?id=${id}  closes ${new Date(Number(closeAt) * 1000).toISOString()}`);
+console.log(`https://askswarm.evalengine.ai/market?id=${id}  closes ${new Date(Number(closeAt) * 1000).toISOString()}`);
 process.exit(0);

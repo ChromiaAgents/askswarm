@@ -47,7 +47,7 @@ Registry #2088 `0x3fc72adfed89284e4f3f378646a5338f2f1e14ea` (the current registr
 | SwarmMarket `0x4964d5f0…8afa55` (launch #2190) | market 1 | Did Argentina win the 2022 FIFA World Cup? | 2 traders, 1.1 IMD staked; keeper resolved and settled; resolved YES; winner claimed 1.098 IMD; 0.002 IMD fee | [open](https://etherscan.io/tx/0x7e1c50de365e35f811fa550a0baf738c285c950ea8b1e19d1d35475d17d8b5ef) · [claim](https://etherscan.io/tx/0x8b669b23fda263bc72998b78e44d0619c6de3ec74d7baab1cffb6018a0409fce) |
 
 Both were opened between the AskSwarm house wallet and a second test wallet to prove the full loop;
-markets opened by others show up at https://askswarm-nine.vercel.app/market.
+markets opened by others show up at https://askswarm.evalengine.ai/market.
 
 ## Robinhood Chain: 2026-10-19 batch
 

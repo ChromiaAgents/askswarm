@@ -61,7 +61,7 @@ async function imdCostLine(): Promise<string> {
 
 // Pay-with-IMD link: the page gets chat/message ids and the question in the URL, signed so only the bot
 // can mint one. Reuses the webhook secret rather than adding another env var.
-export const BASE_URL = process.env.PUBLIC_URL ?? "https://askswarm-nine.vercel.app";
+export const BASE_URL = process.env.PUBLIC_URL ?? "https://askswarm.evalengine.ai";
 export const sign = (chatId: number | string, msgId: number, question: string) =>
   createHmac("sha256", env("TELEGRAM_WEBHOOK_SECRET")).update(`${chatId}\n${msgId}\n${question}`).digest("hex").slice(0, 32);
 export const verifySig = (chatId: string, msgId: number, question: string, sig: string) => {
