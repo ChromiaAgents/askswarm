@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskSwarm · Stats</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Regular_Webfont.ttf) format("truetype");font-weight:400}
+  @font-face{font-family:"NB International";src:url(/fonts/NB_International_Bold_Webfont.ttf) format("truetype");font-weight:700}
+  body{margin:0;background:#F5EEEE;color:#1F1A23;font:16px/1.45 "NB International",Helvetica,Arial,sans-serif;padding:24px 16px}
+  main{max-width:900px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px} h2{font-size:18px;margin:28px 0 10px}
+  .meta{font-size:14px;color:#5a5260}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .card{background:#fff;border:2px solid #1F1A23;border-radius:16px;padding:14px;box-shadow:4px 4px 0 #1F1A23}
+  .card b{display:block;font-size:28px} .card span{font-size:13px;color:#5a5260}
+  table{width:100%;border-collapse:collapse;background:#fff;border:2px solid #1F1A23;border-radius:16px;overflow:hidden;font-size:14px}
+  td,th{padding:7px 10px;text-align:left;border-bottom:1px solid #eee} th{background:#F5EEEE}
+  .bar{display:inline-block;height:10px;background:#CC91F0;border-radius:5px;vertical-align:middle;margin-right:6px}
+  a{color:#9E5ECF}
+</style>
+</head>
+<body>
+<main>
+  <h1>AskSwarm stats</h1>
+  <div class="meta" id="sub">Loading…</div>
+  <h2>Onchain (all time)</h2>
+  <div class="grid" id="chain"></div>
+  <h2>Telegram bot</h2>
+  <div class="grid" id="bot"></div>
+  <h2>Daily</h2>
+  <table id="daily"></table>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const card = (n, label) => `<div class="card"><b>${n ?? "–"}</b><span>${label}</span></div>`;
+  const bar = (v, max) => `<span class="bar" style="width:${max ? Math.round((v / max) * 80) : 0}px"></span>${v}`;
+  fetch("/api/stats").then((r) => r.json()).then((s) => {
+    $("sub").textContent = `Updated ${new Date().toLocaleString()} · onchain from registry and market events, bot from usage counters`;
+    $("chain").innerHTML = [
+      card(s.asks.total, "questions asked"), card(s.asks.answered, "answered, verified"), card(s.asks.noResult, "panel split"),
+      card(s.asks.askers, "unique askers"), card(s.markets.total, "markets"), card(s.markets.open, "open now"),
+      card(s.markets.bets, "bets"), card(s.markets.bettors, "unique bettors"), card(s.markets.volumeImd.toFixed(2), "IMD staked"),
+    ].join("");
+    const b = s.bot;
+    $("bot").innerHTML = b ? [card(b.users, "unique users"), card(b.privateChats, "private chats"), card(b.groups, "groups"), card(b.muted, "sent /stop")].join("")
+      : `<div class="meta">Redis not connected.</div>`;
+    const days = {};
+    for (const d of s.onchainDaily) days[d.day] = { ...d };
+    for (const d of b?.daily ?? []) Object.assign(days[d.day] ??= { day: d.day }, { users: d.users, cmds: Object.values(d.hits).reduce((a, x) => a + x, 0), top: Object.entries(d.hits).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => `/${k} ${v}`).join(", ") });
+    const rows = Object.values(days).sort((x, y) => y.day.localeCompare(x.day));
+    const mx = (k) => Math.max(0, ...rows.map((r) => r[k] ?? 0));
+    const m = { asks: mx("asks"), bets: mx("bets"), users: mx("users"), cmds: mx("cmds") };
+    $("daily").innerHTML = `<tr><th>Day (UTC)</th><th>Asks</th><th>Bets</th><th>Bot users</th><th>Commands</th><th>Top</th></tr>` +
+      rows.map((r) => `<tr><td>${r.day}</td><td>${bar(r.asks ?? 0, m.asks)}</td><td>${bar(r.bets ?? 0, m.bets)}</td><td>${bar(r.users ?? 0, m.users)}</td><td>${bar(r.cmds ?? 0, m.cmds)}</td><td class="meta">${r.top ?? ""}</td></tr>`).join("");
+  }).catch((e) => { $("sub").textContent = "Could not load: " + e; });
+</script>
+</body>
+</html>

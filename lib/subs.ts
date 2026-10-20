@@ -31,3 +31,21 @@ export async function track(chatId: number | string) {
 export async function subscribe(chatId: number | string) { const id = String(chatId); seen.add(id); await redis(["SREM", MUTED, id], ["SADD", CHATS, id]); }
 export async function unsubscribe(chatId: number | string, mute = true) { const id = String(chatId); seen.add(id); await redis(["SREM", CHATS, id], ...(mute ? [["SADD", MUTED, id]] : [])); }
 export async function subscribers(): Promise<string[]> { const [all] = await redis(["SMEMBERS", CHATS]); return all ?? []; }
+
+// Usage counters for /stats: per-day command counts plus unique users (HyperLogLog, ~1% error, 12KB each).
+const day = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+export async function hit(cmd: string, uid?: number) {
+  const d = day();
+  await redis(["HINCRBY", `askswarm:hits:${d}`, cmd, 1], ...(uid ? [["PFADD", "askswarm:users", uid], ["PFADD", `askswarm:dau:${d}`, uid]] : []));
+}
+export async function botStats(days = 14) {
+  if (!subsEnabled) return null;
+  const ds = Array.from({ length: days }, (_, i) => day(Date.now() - i * 86400_000)).reverse();
+  const res = await redis(["SMEMBERS", CHATS], ["SCARD", MUTED], ["PFCOUNT", "askswarm:users"], ...ds.flatMap((d) => [["HGETALL", `askswarm:hits:${d}`], ["PFCOUNT", `askswarm:dau:${d}`]]));
+  const [chats, muted, users] = res;
+  const pairs = (a: string[] = []) => Object.fromEntries(a.flatMap((_, i) => (i % 2 ? [] : [[a[i], Number(a[i + 1])]])));
+  return {
+    users, muted, privateChats: (chats ?? []).filter((c: string) => !c.startsWith("-")).length, groups: (chats ?? []).filter((c: string) => c.startsWith("-")).length,
+    daily: ds.map((d, i) => ({ day: d, users: res[4 + i * 2], hits: pairs(res[3 + i * 2]) })),
+  };
+}

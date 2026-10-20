@@ -10,7 +10,7 @@ import * as intake from "../packages/imd/src/intake";
 import { ChromiaPay } from "../packages/cpay/src/index";
 import * as risk from "./risk";
 import { ACTIVE, CHAINS as NET, txUrl as explorerTx, addrUrl } from "./chains";
-import { track, subscribe, unsubscribe } from "./subs";
+import { track, subscribe, unsubscribe, hit } from "./subs";
 import { recall } from "./recall";
 import { quickTake } from "./quick";
 import { marketTitle, miniAppLink, inTime } from "./announce";
@@ -79,6 +79,9 @@ export const bot = new Bot(env("TELEGRAM_BOT_TOKEN"), { client: { fetch: globalT
 // Market news goes to everyone who uses the bot (lib/subs.ts): remember each chat on first contact.
 bot.use(async (ctx, next) => {
   if (ctx.chat && !ctx.message?.text?.startsWith("/stop")) await track(ctx.chat.id).catch((e) => console.error("[subs]", e?.message ?? e));
+  const t = ctx.message?.text;
+  const cmd = t?.startsWith("/") ? t.slice(1).split(/[\s@]/)[0].toLowerCase() : t && ctx.chat?.type === "private" ? "ask" : ctx.callbackQuery ? "button" : null;
+  if (cmd && /^[a-z_]{1,20}$/.test(cmd)) await hit(cmd, ctx.from?.id).catch(() => {});
   await next();
 });
 bot.on("my_chat_member", async (ctx) => {
