@@ -11,5 +11,18 @@
       "path": "/api/keeper",
       "schedule": "*/10 * * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "askswarm-nine.vercel.app"
+        }
+      ],
+      "destination": "https://askswarm.evalengine.ai/:path",
+      "permanent": false
+    }
   ]
 }
