@@ -1,0 +1,155 @@
+1
+00:00:00,300 --> 00:00:03,300
+AskSwarm. Ask the IMD swarm from Telegram,
+
+2
+00:00:03,300 --> 00:00:06,400
+bet on its answer, and get paid when it's
+
+3
+00:00:06,400 --> 00:00:09,200
+verified onchain. Live on Robinhood Chain.
+
+4
+00:00:10,041 --> 00:00:12,761
+Here's the loop. You ask or bet,
+
+5
+00:00:12,761 --> 00:00:15,161
+the IMD swarm answers and the
+
+6
+00:00:15,161 --> 00:00:17,441
+registry verifies it onchain.
+
+7
+00:00:17,441 --> 00:00:19,640
+Markets settle and every answer and
+
+8
+00:00:19,640 --> 00:00:21,841
+bet flows into our open dataset
+
+9
+00:00:21,841 --> 00:00:23,321
+which trains the model that warns
+
+10
+00:00:23,321 --> 00:00:25,561
+the next person before they pay.
+
+11
+00:00:25,761 --> 00:00:27,682
+Let's try it in Telegram. Type
+
+12
+00:00:27,682 --> 00:00:29,802
+markets to see today's rounds on
+
+13
+00:00:29,802 --> 00:00:30,882
+Robinhood Chain.
+
+14
+00:00:31,962 --> 00:00:34,121
+Open one and it runs right inside
+
+15
+00:00:34,121 --> 00:00:36,922
+Telegram. Pick yes, choose a tenth
+
+16
+00:00:36,922 --> 00:00:38,442
+of an IMD and see what you'd
+
+17
+00:00:38,442 --> 00:00:39,082
+win.
+
+18
+00:00:40,342 --> 00:00:42,422
+This is a real bet, signed and
+
+19
+00:00:42,422 --> 00:00:44,341
+confirmed on Robinhood Chain in
+
+20
+00:00:44,341 --> 00:00:45,422
+seconds.
+
+21
+00:00:47,383 --> 00:00:49,623
+The odds moved. When the swarm
+
+22
+00:00:49,623 --> 00:00:52,063
+answers, winners claim their payout.
+
+23
+00:00:54,104 --> 00:00:57,023
+Now, ask the swarm. If it already
+
+24
+00:00:57,023 --> 00:00:59,064
+answered your question, the signed
+
+25
+00:00:59,064 --> 00:01:01,944
+verdict is free and instant.
+
+26
+00:01:05,544 --> 00:01:09,064
+144 of 200 agents agreed. Anyone
+
+27
+00:01:09,064 --> 00:01:10,584
+can verify the signature.
+
+28
+00:01:13,225 --> 00:01:15,345
+When a round closes, the swarm
+
+29
+00:01:15,345 --> 00:01:17,745
+answers it. 11 of 15
+
+30
+00:01:17,745 --> 00:01:21,025
+agents agreed, verified onchain,
+
+31
+00:01:21,025 --> 00:01:22,784
+the winner taps claim,
+
+32
+00:01:22,784 --> 00:01:24,505
+and is paid onchain.
+
+33
+00:01:29,364 --> 00:01:31,485
+No browser wallet? Connect any
+
+34
+00:01:31,485 --> 00:01:32,365
+wallet app.
+
+35
+00:01:33,405 --> 00:01:34,805
+And every answer bought through
+
+36
+00:01:34,805 --> 00:01:36,445
+the registry is public and
+
+37
+00:01:36,445 --> 00:01:37,805
+verified onchain.
+
+38
+00:01:43,145 --> 00:01:45,425
+AskSwarm, built by Chromia and
+
+39
+00:01:45,425 --> 00:01:46,545
+Eval Engine.
