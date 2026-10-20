@@ -17,7 +17,7 @@ const marketAbi = parseAbi([
   "function count() view returns (uint256)",
   "function RESOLVE_WINDOW() view returns (uint64)",
   "function get(uint256 id) view returns ((address creator,uint64 closeAt,uint64 resolveAfter,uint64 askedAt,uint8 phase,uint96 feeEscrow,uint128 yesPool,uint128 noPool,uint128 winnersShare,bytes32 requestId) m, bytes body)",
-  "function resolve(uint256 id)", "function settle(uint256 id)", "function abandon(uint256 id)",
+  "function resolve(uint256 id)", "function settle(uint256 id)", "function abandon(uint256 id)", "function claim(uint256 id) returns (uint256)", "function claimable(uint256 id, address user) view returns (uint256)",
   "function open(bytes body, uint64 closeAt, uint64 resolveAfter) returns (uint256)",
   "function stake(uint256 id, bool yes, uint128 amount)",
   "event Opened(uint256 indexed id, address indexed creator, uint64 closeAt, uint64 resolveAfter, bytes body)",
@@ -148,6 +148,10 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
         if (now >= m.resolveAfter && now <= m.resolveAfter + win) await tryCall("market", M, marketAbi, "resolve", i);
         else if (now > m.resolveAfter + win) await tryCall("market", M, marketAbi, "abandon", i);
       } else if (m.phase === 2) await tryCall("market", M, marketAbi, "settle", i); // Asked
+      else if (m.phase >= 3) { // Settled or void: collect the house's seed stakes and winnings, so they fund the next rounds
+        const owed = await pub.readContract({ address: M, abi: marketAbi, functionName: "claimable", args: [i, account.address] }).catch(() => 0n);
+        if (owed > 0n) await tryCall("market", M, marketAbi, "claim", i);
+      }
       const done = acts[acts.length - 1];
       if (done && done.contract === "market" && done.id === Number(i) && done.tx && (done.fn === "settle" || done.fn === "abandon" || done.fn === "resolve")) {
         const [after, body] = await pub.readContract({ address: M, abi: marketAbi, functionName: "get", args: [i] });
