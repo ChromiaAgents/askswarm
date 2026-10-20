@@ -175,7 +175,8 @@
   // Plain-English title for the swarm's past-tense question. The question itself is what settles.
   function title(r) {
     const q = r.question || r.body?.question || "";
-    const m = q.match(/^Was the Coinbase (\w+)-USD daily close on (\d+) (\w+) (\d{4}) \(UTC\) above ([\d,.]+) US dollars\?$/);
+    const m = q.match(/^Was the Coinbase (\w+)-USD daily close on (\d+) (\w+) (\d{4}) \(UTC\) above ([\d,.]+) US dollars\?$/)
+      || q.match(/^Was the closing price of \w+ \((\w+)\) on (\d+) (\w+) (\d{4}), as listed on CoinMarketCap historical data, above ([\d,.]+) US dollars\?$/);
     if (!m) return q;
     const day = `${MON[m[3]] || m[3]} ${m[2]}`, opened = r.openedAt ? new Date(r.openedAt * 1000) : null;
     const sameDay = opened && opened.getUTCDate() === Number(m[2]) && MON[["January","February","March","April","May","June","July","August","September","October","November","December"][opened.getUTCMonth()]] === MON[m[3]];

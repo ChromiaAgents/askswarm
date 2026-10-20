@@ -22,7 +22,7 @@ const marketAbi = parseAbi([
   "function stake(uint256 id, bool yes, uint128 amount)",
   "event Opened(uint256 indexed id, address indexed creator, uint64 closeAt, uint64 resolveAfter, bytes body)",
 ]);
-// Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase price when the round
+// Daily "up or down" rounds, like HIP-4's daily markets: target = the Coinbase spot price when the round
 // opens, settled by the swarm on that day's close. The house seeds both sides so every round is live.
 const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) => s.trim()).filter(Boolean);
 // Precheck codes that do not mean "bad question": the future (asked after the close) and IMD's own
@@ -30,9 +30,14 @@ const DAILY = (process.env.DAILY_PAIRS ?? "ETH-USD,BTC-USD").split(",").map((s) 
 const SOFT = new Set(["not_answerable", "chain_unavailable"]);
 const SEED = parseEther(process.env.DAILY_SEED_IMD ?? "0.1");
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// IMD's intake refuses Coinbase-price wording as "not answerable from public sources" even for past
+// days (both 19 Oct rounds voided that way); it accepts a CoinMarketCap historical close named with
+// asset and ticker, e.g. "Bitcoin (BTC)" (plain "Bitcoin" was refused). Tested on 20 Oct 2026.
+const ASSET: Record<string, string> = { "ETH-USD": "Ethereum (ETH)", "BTC-USD": "Bitcoin (BTC)" };
+const dayText = (day: Date) => `${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()}`;
 export const dailyQuestion = (pair: string, day: Date, target: number) =>
-  `Was the Coinbase ${pair} daily close on ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()} (UTC) above ${Math.round(target).toLocaleString("en-US")} US dollars?`;
-const dailyPrefix = (pair: string, day: Date) => `Was the Coinbase ${pair} daily close on ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()} (UTC)`;
+  `Was the closing price of ${ASSET[pair] ?? pair} on ${dayText(day)}, as listed on CoinMarketCap historical data, above ${Math.round(target).toLocaleString("en-US")} US dollars?`;
+const dailyPrefix = (pair: string, day: Date) => `Was the closing price of ${ASSET[pair] ?? pair} on ${dayText(day)},`;
 const wagerAbi = parseAbi([
   "function count() view returns (uint256)",
   "function get(uint256 id) view returns ((address yes,address no,address creator,uint96 stake,uint96 fee,uint64 joinBy,uint64 resolveAfter,uint64 askedAt,uint8 state,bytes32 requestId,address winner) w, bytes body)",
@@ -118,12 +123,12 @@ async function runChain(c: ChainCfg): Promise<Act[]> {
         } catch {
           // IMD's precheck unreachable (not a rejection): reuse the last accepted body for this pair, which
           // differs from today's only in the question, so the day still gets its round.
-          const prev = [...bodies].reverse().find((x: any) => typeof x.question === "string" && x.question.startsWith(`Was the Coinbase ${pair} daily close`));
+          const prev = [...bodies].reverse().find((x: any) => typeof x.question === "string" && x.question.startsWith(`Was the closing price of ${ASSET[pair] ?? pair} on`));
           if (!prev) throw new Error("precheck unreachable, no template");
           chk = { request: { ...prev, question }, blockers: [] } as any;
         }
         if (!chk.request || chk.request.answerType !== "bool" || (chk.blockers ?? []).some((b) => !SOFT.has(b.code))) { acts.push({ contract: "market", id: 0, fn: `daily ${pair}`, skipped: "precheck" }); continue; }
-        const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 24 * 3600 + 15 * 60);
+        const closeAt = BigInt(day.getTime() / 1000 + 23 * 3600), after = BigInt(day.getTime() / 1000 + 26 * 3600); // 02:00 UTC next day: CoinMarketCap has the close by then
         await send({ address: IMD_TOKEN, abi: erc20Abi, functionName: "approve", args: [M, fee + 2n * SEED] });
         const h = await send({ address: M, abi: marketAbi, functionName: "open", args: [stringToHex(JSON.stringify(chk.request)), closeAt, after] });
         const rc = await pub.getTransactionReceipt({ hash: h });

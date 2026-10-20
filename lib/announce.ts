@@ -11,7 +11,8 @@ const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 
 /** Same plain-English title the market page shows. `daily` marks a keeper round opened that day. */
 export function marketTitle(question: string, daily = false) {
-  const m = question.match(/^Was the Coinbase (\w+)-USD daily close on (\d+) (\w+) (\d{4}) \(UTC\) above ([\d,.]+) US dollars\?$/);
+  const m = question.match(/^Was the Coinbase (\w+)-USD daily close on (\d+) (\w+) (\d{4}) \(UTC\) above ([\d,.]+) US dollars\?$/)
+    ?? question.match(/^Was the closing price of \w+ \((\w+)\) on (\d+) (\w+) (\d{4}), as listed on CoinMarketCap historical data, above ([\d,.]+) US dollars\?$/);
   if (!m) return question;
   const day = `${MONTHS[m[3]] ?? m[3]} ${m[2]}`;
   return daily ? `${m[1]} up or down today? · ${day} · vs $${m[5]}` : `Will ${m[1]} close above $${m[5]} on ${day}?`;
