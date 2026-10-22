@@ -11,7 +11,6 @@
     ["/answers", "Answers", "Answers"],
     ["/stats", "Stats", "Stats"],
     ["/skill.md", "For agents", "Agents"],
-    ["https://huggingface.co/datasets/evalengine/imd-oracle-outcomes", "Dataset", "Data"],
     ["https://github.com/ChromiaAgents/askswarm", "Code", "Code"],
   ];
   const path = location.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
@@ -31,22 +30,24 @@
     .sw-nav .sw-chain{display:inline-flex;align-items:center;gap:6px;font:700 12px ${F};background:#CCFF00;color:#1F1A23;border:2px solid var(--ink,#1F1A23);border-radius:999px;padding:4px 10px;text-decoration:none;white-space:nowrap}
     .sw-nav .sw-chain i{width:7px;height:7px;border-radius:50%;background:#1F1A23;display:inline-block}
     .sw-nav .sw-imd{display:inline-flex;align-items:center;gap:5px;font:700 12px ${F};background:#CC91F0;color:#1F1A23;border:2px solid var(--ink,#1F1A23);border-radius:999px;padding:4px 10px;text-decoration:none;white-space:nowrap}
+    .sw-nav .sw-hf{display:inline-flex;align-items:center;gap:4px;font:700 12px ${F};background:#FFD21E;color:#1F1A23;border:2px solid var(--ink,#1F1A23);border-radius:999px;padding:4px 10px;text-decoration:none;white-space:nowrap}
     .sw-nav .sw-badges{display:flex;gap:6px;align-items:center;min-width:0}
     @media (max-width:1400px){.sw-nav .sw-badges .w{display:none}}
-    @media (max-width:1180px){.sw-nav .sw-links a.code{display:none}}
+    @media (min-width:1001px) and (max-width:1180px){.sw-nav .sw-links a.code{display:none}}
     @media (max-width:860px){.sw-nav .sw-links a{padding:7px 9px}}
     @media (max-width:1000px){
       .sw-nav{padding:0 12px;margin-bottom:16px}
       .sw-nav .sw-in{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"brand chain cta" "links links links";height:auto;gap:8px 10px;padding:8px 0}
       .sw-nav .sw-brand{grid-area:brand}.sw-nav .sw-brand span{display:none}.sw-nav .sw-brand img{width:30px;height:30px}
       .sw-nav .sw-badges{grid-area:chain;justify-self:start}
-      .sw-nav .sw-chain .w,.sw-nav .sw-imd .w{display:none}
+      .sw-nav .sw-chain .w,.sw-nav .sw-imd .w,.sw-nav .sw-hf .w{display:none}.sw-nav .sw-hf{padding:2px 7px}
       .sw-nav .sw-cta{grid-area:cta;padding:6px 12px;font-size:13px;box-shadow:2px 2px 0 var(--ink,#1F1A23)}
-      .sw-nav .sw-links{grid-area:links;gap:2px;justify-content:space-between}
-      .sw-nav .sw-links a{flex:1 1 0;text-align:center;font-size:13px;padding:7px 2px;min-width:0}
+      .sw-nav .sw-links{grid-area:links;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+      .sw-nav .sw-links a{text-align:center;font-size:13px;padding:6px 2px;min-width:0}
       .sw-nav .sw-links .l{display:none}.sw-nav .sw-links .s{display:inline}
-      .sw-nav .sw-links a.code{display:none}
-    }`;
+      .sw-nav .sw-badges{gap:4px}
+    }
+    @media (max-width:400px){.sw-nav .sw-chain,.sw-nav .sw-imd{font-size:11px;padding:3px 7px}.sw-nav .sw-cta{padding:5px 10px}}`;
   const st = document.createElement("style");
   st.textContent = css;
   document.head.appendChild(st);
@@ -54,7 +55,7 @@
   h.className = "sw-nav";
   h.innerHTML = `<div class="sw-in"><a class="sw-brand" href="/"><img src="/logo.svg" alt=""><span>AskSwarm</span></a><div class="sw-links">${links
     .map(([href, label, short]) => `<a href="${href}" class="${href === path ? "on " : ""}${href.startsWith("http") ? "code" : ""}"${href.startsWith("http") ? ' target="_blank" rel="noopener"' : ""}><span class="l">${label}</span><span class="s">${short}</span></a>`)
-    .join("")}</div><div class="sw-badges"><a class="sw-chain" href="https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012" target="_blank" rel="noopener" title="AskSwarmRegistry on Robinhood Chain (chainId 4663), source verified. Earlier Ethereum markets stay readable."><i></i><span>Robinhood<span class="w"> Chain</span></span></a><a class="sw-imd" href="https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82" target="_blank" rel="noopener" title="Audited and deployed by the IMD swarm in launch #2223"><span>IMD<span class="w"> launch</span> #2223</span></a></div>${inTg ? "" : `<a class="sw-cta" href="https://t.me/askswarm_bot" target="_blank" rel="noopener">Open bot</a>`}</div>`;
+    .join("")}</div><div class="sw-badges"><a class="sw-chain" href="https://robinhoodchain.blockscout.com/address/0xf3a79f962ec1e75f0087af5491a69dee2a869012" target="_blank" rel="noopener" title="AskSwarmRegistry on Robinhood Chain (chainId 4663), source verified. Earlier Ethereum markets stay readable."><i></i><span>Robinhood<span class="w"> Chain</span></span></a><a class="sw-imd" href="https://explorer.imd.fun/jobs/dffc8efb-80a1-4774-9720-440834a61b82" target="_blank" rel="noopener" title="Audited and deployed by the IMD swarm in launch #2223"><span>IMD<span class="w"> launch</span> #2223</span></a><a class="sw-hf" href="https://huggingface.co/datasets/evalengine/imd-oracle-outcomes" target="_blank" rel="noopener" title="Open dataset: 7,800+ IMD oracle outcomes on Hugging Face"><span aria-hidden="true">🤗</span><span class="w"> Dataset</span></a></div>${inTg ? "" : `<a class="sw-cta" href="https://t.me/askswarm_bot" target="_blank" rel="noopener">Open bot</a>`}</div>`;
   // Full-bleed regardless of each page's body padding.
   const cs = getComputedStyle(document.body);
   h.style.marginLeft = "-" + cs.paddingLeft; h.style.marginRight = "-" + cs.paddingRight; h.style.marginTop = "-" + cs.paddingTop;
