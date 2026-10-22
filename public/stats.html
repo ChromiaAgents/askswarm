@@ -30,12 +30,15 @@
   td,th{padding:7px 10px;text-align:left;border-bottom:1px solid #eee} th{background:#F5EEEE}
   .bar{display:inline-block;height:10px;background:#CC91F0;border-radius:5px;vertical-align:middle;margin-right:6px}
   a{color:#9E5ECF}
+  .sk{display:block;border-radius:6px;background:linear-gradient(90deg,#EFE6EF 25%,#F8F3F8 50%,#EFE6EF 75%);background-size:200% 100%;animation:sk 1.2s linear infinite}
+  @keyframes sk{to{background-position:-200% 0}}
+  @media (prefers-reduced-motion:reduce){.sk{animation:none}}
 </style>
 </head>
 <body>
 <main>
   <h1>AskSwarm stats</h1>
-  <div class="meta" id="sub">Loading…</div>
+  <div class="meta" id="sub" aria-busy="true"><span class="sk" style="width:min(420px,90%);height:14px;margin:3px 0"></span></div>
   <h2>Onchain (all time)</h2>
   <div class="grid" id="chain"></div>
   <h2>Telegram bot</h2>
@@ -47,7 +50,13 @@
   const $ = (id) => document.getElementById(id);
   const card = (n, label) => `<div class="card"><b>${n ?? "–"}</b><span>${label}</span></div>`;
   const bar = (v, max) => `<span class="bar" style="width:${max ? Math.round((v / max) * 80) : 0}px"></span>${v}`;
+  const skCard = `<div class="card"><span class="sk" style="width:60%;height:34px;margin-bottom:8px"></span><span class="sk" style="width:80%;height:12px"></span></div>`;
+  $("chain").innerHTML = skCard.repeat(9);
+  $("bot").innerHTML = skCard.repeat(4);
+  $("daily").innerHTML = `<tr><th>Day (UTC)</th><th>Asks</th><th>Bets</th><th>Bot users</th><th>Commands</th><th>Top</th></tr>` +
+    `<tr>${"<td><span class=sk style=height:12px></span></td>".repeat(6)}</tr>`.repeat(5);
   fetch("/api/stats").then((r) => r.json()).then((s) => {
+    $("sub").removeAttribute("aria-busy");
     $("sub").textContent = `Updated ${new Date().toLocaleString()} · onchain from registry and market events, bot from usage counters`;
     $("chain").innerHTML = [
       card(s.asks.total, "questions asked"), card(s.asks.answered, "answered, verified"), card(s.asks.noResult, "panel split"),
@@ -65,7 +74,7 @@
     const m = { asks: mx("asks"), bets: mx("bets"), users: mx("users"), cmds: mx("cmds") };
     $("daily").innerHTML = `<tr><th>Day (UTC)</th><th>Asks</th><th>Bets</th><th>Bot users</th><th>Commands</th><th>Top</th></tr>` +
       rows.map((r) => `<tr><td>${r.day}</td><td>${bar(r.asks ?? 0, m.asks)}</td><td>${bar(r.bets ?? 0, m.bets)}</td><td>${bar(r.users ?? 0, m.users)}</td><td>${bar(r.cmds ?? 0, m.cmds)}</td><td class="meta">${r.top ?? ""}</td></tr>`).join("");
-  }).catch((e) => { $("sub").textContent = "Could not load: " + e; });
+  }).catch((e) => { $("sub").removeAttribute("aria-busy"); $("sub").textContent = "Could not load: " + e; $("chain").innerHTML = $("bot").innerHTML = $("daily").innerHTML = ""; });
 </script>
 </body>
 </html>
