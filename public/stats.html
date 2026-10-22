@@ -26,7 +26,8 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
   .card{background:#fff;border:2px solid #1F1A23;border-radius:16px;padding:14px;box-shadow:4px 4px 0 #1F1A23}
   .card b{display:block;font-size:28px} .card span{font-size:13px;color:#5a5260}
-  table{width:100%;border-collapse:collapse;background:#fff;border:2px solid #1F1A23;border-radius:16px;overflow:hidden;font-size:14px}
+  .tw{overflow-x:auto;background:#fff;border:2px solid #1F1A23;border-radius:16px}
+  table{width:100%;border-collapse:collapse;font-size:14px;white-space:nowrap}
   td,th{padding:7px 10px;text-align:left;border-bottom:1px solid #eee} th{background:#F5EEEE}
   .bar{display:inline-block;height:10px;background:#CC91F0;border-radius:5px;vertical-align:middle;margin-right:6px}
   a{color:#9E5ECF}
@@ -44,7 +45,7 @@
   <h2>Telegram bot</h2>
   <div class="grid" id="bot"></div>
   <h2>Daily</h2>
-  <table id="daily"></table>
+  <div class="tw"><table id="daily"></table></div>
 </main>
 <script>
   const $ = (id) => document.getElementById(id);
