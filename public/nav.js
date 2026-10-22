@@ -11,6 +11,7 @@
     ["/answers", "Answers", "Answers"],
     ["/stats", "Stats", "Stats"],
     ["/skill.md", "For agents", "Agents"],
+    ["https://huggingface.co/datasets/evalengine/imd-oracle-outcomes", "Dataset", "Data"],
     ["https://github.com/ChromiaAgents/askswarm", "Code", "Code"],
   ];
   const path = location.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
