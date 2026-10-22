@@ -10,6 +10,11 @@ export const maxDuration = 30;
 const day = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 
 export async function GET() {
+  return new Response(JSON.stringify(await statsBody()), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
+}
+
+// Shared with /api/og-stats so the preview image and the page read the same numbers.
+export async function statsBody() {
   const [answers, markets, bot] = await Promise.all([rows().catch(() => []), marketRows().catch(() => []), botStats().catch(() => null)]);
   const byDay: Record<string, { asks: number; bets: number }> = {};
   const at = (t: number) => (byDay[day(t)] ??= { asks: 0, bets: 0 });
@@ -17,7 +22,7 @@ export async function GET() {
   const trades = markets.flatMap((m: any) => m.trades);
   for (const t of trades) if (t.t) at(t.t).bets++;
   const status = (s: string) => answers.filter((r) => r.status === s).length;
-  const body = {
+  return {
     asks: { total: answers.length, answered: status("answered"), noResult: status("no result"), refused: status("refused"), pending: status("pending"), askers: new Set(answers.map((r) => r.asker.toLowerCase())).size },
     markets: { total: markets.length, open: markets.filter((m: any) => m.phase === "open").length, bets: trades.length,
       bettors: new Set(trades.map((t: any) => t.user.toLowerCase())).size,
@@ -25,5 +30,4 @@ export async function GET() {
     bot,
     onchainDaily: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).slice(-30).map(([d, v]) => ({ day: d, ...v })),
   };
-  return new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
 }
