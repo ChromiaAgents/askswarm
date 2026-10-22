@@ -9,6 +9,7 @@
     ["/market", "Markets", "Markets"],
     ["/wager", "1v1 bets", "1v1"],
     ["/answers", "Answers", "Answers"],
+    ["/stats", "Stats", "Stats"],
     ["/skill.md", "For agents", "Agents"],
     ["https://github.com/ChromiaAgents/askswarm", "Code", "Code"],
   ];
