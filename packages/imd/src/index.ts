@@ -84,12 +84,34 @@ export async function checkAction(action: string, input: Record<string, unknown>
 
 export async function check(question: string, panelSize: number, chainId?: number): Promise<CheckResult> {
   // server rejects `quorum` here and derives it (15 -> 11). Limits seen live: panelSize 5..100.
-  const res = await fetch(`${IMD_API}/requests/check`, {
-    method: "POST", headers: json,
-    body: JSON.stringify({ action: "oracle.request", input: chainId ? { question, panelSize, chainId } : { question, panelSize } }),
-    signal: AbortSignal.timeout(15_000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${IMD_API}/requests/check`, {
+      method: "POST", headers: json,
+      body: JSON.stringify({ action: "oracle.request", input: chainId ? { question, panelSize, chainId } : { question, panelSize } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    // The API is only a precheck; the ask itself goes onchain. If the API host is unreachable
+    // (DNS down, timeout), build the request locally in the same shape the API returns.
+    console.warn("[imd] precheck unreachable, using local request", (e as Error)?.message ?? e);
+    return localCheck(question, panelSize, chainId);
+  }
   return j<CheckResult>(res);
+}
+
+// ponytail: yes/no detection is a first-word heuristic; anything else is asked as bytes32 text.
+const YES_NO = /^(is|are|was|were|did|does|do|will|would|has|have|had|can|could|should)\b/i;
+export function localCheck(question: string, panelSize: number, chainId?: number): CheckResult {
+  const q = question.trim();
+  return {
+    action: "oracle.request", blockers: [], suggestions: [], online: false,
+    request: {
+      v: 1, question: q, chainId: chainId ?? 1, window: { hours: 24 },
+      answerType: YES_NO.test(q) ? "bool" : "bytes32", evidence: "panel",
+      panelSize, quorum: Math.ceil(panelSize * 0.7), validForSeconds: 86400,
+    },
+  };
 }
 
 export async function quote(token: string, requestKey: string, input: OracleRequestBody | Record<string, unknown>, action = "oracle.request"): Promise<Order> {
